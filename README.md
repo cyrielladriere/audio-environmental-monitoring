@@ -4,4 +4,4 @@ The recent news related to artificial intelligence, such as ChatGPT, is amazing,
 
 If we want AI to cover real-life scenarios, we want smaller models that can run on devices with limited resources. For audio-based applications, with the widely concerned security and privacy issues, we also hope that the model can be deployed and installed on the local device instead of transmitting any sound to the server. This proposal aims to create an AI model based on edge devices that relies on audio to monitor the environment in real time.
 
-![Alt text](image.png)
+![Alt text](img/image.png)
