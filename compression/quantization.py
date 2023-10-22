@@ -1,8 +1,22 @@
 # https://github.com/Sanjana7395/static_quantization/blob/master/quantization%20pytorch.ipynb
+# https://pytorch.org/docs/master/quantization.html#quantization-aware-training
+# https://pytorch.org/tutorials/advanced/static_quantization_tutorial.html !
 import torch
 from torchvision.io import read_image
 from torchvision.models.quantization import mobilenet_v3_large, MobileNet_V3_Large_QuantizedWeights
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# Set up warnings
+import warnings
+warnings.filterwarnings(
+    action='ignore',
+    category=DeprecationWarning,
+    module=r'.*'
+)
+warnings.filterwarnings(
+    action='default',
+    module=r'torch.ao.quantization'
+)
 
 img = read_image("data/koala.jpg")
 
