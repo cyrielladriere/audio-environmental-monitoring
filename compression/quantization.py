@@ -1,3 +1,4 @@
+# https://github.com/Sanjana7395/static_quantization/blob/master/quantization%20pytorch.ipynb
 import torch
 from torchvision.io import read_image
 from torchvision.models.quantization import mobilenet_v3_large, MobileNet_V3_Large_QuantizedWeights
