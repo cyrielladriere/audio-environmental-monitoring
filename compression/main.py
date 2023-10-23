@@ -12,21 +12,20 @@ from torchvision.models import MobileNet_V3_Large_Weights
 from torchvision.models.quantization import mobilenet_v3_large, MobileNet_V3_Large_QuantizedWeights
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# ------------- Locations
+# ------------- Variables
 training_data = "data/train"
 val_data = "data/val"
 labels = "data/noisy_imagenette.csv"
+classes = {"n01440764":0, "n02102040": 217, "n02979186": 482, "n03000684": 491, "n03028079": 497, "n03394916": 566, "n03417042": 569, "n03425413": 571, "n03445777": 574, "n03888257": 701}
 # ------------- Hyperparameters
-train_batch_size = 64
-val_batch_size = 64
-num_eval_batches = 1000
+batch_size = 64
 
 def main():
     train_dataset = ImagenetteDataset(labels, training_data, "train")
     val_dataset = ImagenetteDataset(labels, labels, "val")
 
-    train_dataloader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True)
-    val_dataloader = DataLoader(val_dataset, batch_size=val_batch_size, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
 
     model = mobilenet_v3_large(weights=MobileNet_V3_Large_Weights.IMAGENET1K_V1).to(device=device)
     model_quantized = mobilenet_v3_large(weights=MobileNet_V3_Large_QuantizedWeights.DEFAULT, quantize=True).to(device=device)
@@ -34,8 +33,8 @@ def main():
     print_model_size(model_quantized)
 
     criterion = nn.CrossEntropyLoss()
-    top1, top5 = evaluate(model, criterion, val_dataloader)
-    print(f"Evaluation accuracy on {len(val_dataloader)} images: Acc@1={top1}, Acc@5={top5}")
+    top1, top5 = evaluate(model, criterion, train_dataloader)
+    print(f"Evaluation accuracy on {len(train_dataloader)*batch_size} images: {top1}, {top5}")
 
 class ImagenetteDataset(Dataset):
     """Imagenette dataset."""
@@ -109,7 +108,7 @@ def accuracy(output, target, topk=(1,)):
         batch_size = target.size(0)
 
         _, pred = output.topk(maxk, 1, True, True)
-        pred = pred.t()
+        pred = pred.t()     #shape: [maxk, batch_size]
         correct = pred.eq(target.view(1, -1).expand_as(pred))
 
         res = []
@@ -125,20 +124,43 @@ def evaluate(model, criterion, data_loader):#, neval_batches):
     cnt = 0
     with torch.no_grad():
         for i, sample in enumerate(data_loader):
-            image = sample['image'].permute(0, 3, 1, 2)         # change shape: [batch_size, height, width, channels] -> [batch_size, channels, height, width]
+            image_batch = sample['image'].permute(0, 3, 1, 2).float().to(device)         # change shape: [batch_size, height, width, channels] -> [batch_size, channels, height, width]
             target = sample['label']
-            print(image.shape)
-            output = model(image)
+            output = model(image_batch)     # shape: [batch_size, num_classes]
+
             # loss = criterion(output, target)
             # cnt += 1
+
+            # Convert target to tensor of class numbers before giving to accuracy
+            target = torch.tensor([classes[item] for item in target]).to(device)    # shape: [batch_size]
+
             acc1, acc5 = accuracy(output, target, topk=(1, 5))
-            print('.', end = '')
-            top1.update(acc1[0], image.size(0))
-            top5.update(acc5[0], image.size(0))
+            top1.update(acc1[0], image_batch.size(0))
+            top5.update(acc5[0], image_batch.size(0))
             # if cnt >= neval_batches:
             #      return top1, top5
-
     return top1, top5
 
 if __name__ == "__main__":
     main()
+
+"""
+accuracy with array as input
+with torch.no_grad():
+        maxk = max(topk)
+        batch_size = output.shape[0]
+
+        _, pred = output.topk(maxk, 1, True, True)
+        pred = pred.t()
+        target = np.expand_dims(target, axis=0)
+        target = np.tile(target, pred.shape)
+        print(f"target: {target}")
+        print(f"pred: {pred}")
+        correct = pred.eq(target)   #.view(1, -1).expand_as(pred))   
+
+        res = []
+        for k in topk:
+            correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
+            res.append(correct_k.mul_(100.0 / batch_size))
+        return res
+"""
