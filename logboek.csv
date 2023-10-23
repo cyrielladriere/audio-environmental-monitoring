@@ -7,3 +7,6 @@ Datum,Start,Einde,Plaats,Omschrijving,Issue #,Opmerkingen
 15/10/23,09:00,12:00,Extern,Onderzoek naar praktische implementatie van deze SOTA tools in bestaande frameworks zoals Tensorflow en Pytorch,,
 17/10/23,11:30,12:30,Contacturen,Meeting met begeleiders en promotor; voorkeur pytorch en aanvraag data,,
 21/10/23,09:00,12:00,Extern,Starten met schrijven van scripts en maken van architectuur om later baselines makkelijk te kunnen implementeren,,
+22/10/23,12:00,16:00,Extern,Start schrijven van scripts voor evaluaties model,,
+23/10/23,09:00,12:00,Extern,Afwerken schrijven scripts voor evaluaties model,,
+23/10/23,13:00,16:00,Extern,Start coderen trainingsprocedure qat,,
