@@ -110,14 +110,14 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, ntrain_bat
     return
 
 class QuantizableMobileNetV3(MobileNetV3):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, num_classes=1000, inverted_residual_setting=None, last_channel=1280):
         """
         MobileNet V3 main class
 
         Args:
            Inherits args from floating point MobileNetV3
         """
-        super().__init__(*args, **kwargs)
+        super().__init__(num_classes, inverted_residual_setting, last_channel)
         self.quant = QuantStub()
         self.dequant = DeQuantStub()
 
