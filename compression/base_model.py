@@ -39,7 +39,6 @@ def train_model(model, train_loader, n_epochs, optimizer, criterion):
             optimizer.zero_grad()
             
             outputs = model(inputs) # Something goes wrong here with quantized model
-            print("ok")
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
