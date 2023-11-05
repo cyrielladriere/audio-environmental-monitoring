@@ -33,6 +33,12 @@ def print_model_size(mdl):
     print("%.2f MB" %(os.path.getsize("tmp.pt")/1e6))
     os.remove('tmp.pt')
 
+    total_params = sum(param.numel() for param in mdl.parameters())
+    print(f"Number of parameters: {total_params}")
+
+    trainable_params = sum(p.numel() for p in mdl.parameters() if p.requires_grad)
+    print(f"Number of trainable parameters: {trainable_params}")
+
 def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
     with torch.no_grad():
