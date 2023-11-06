@@ -1,6 +1,34 @@
 import librosa
 import numpy as np
+import pandas as pd
 import pickle
+from PIL import Image 
+
+classes = {'Bark': 0, 'Motorcycle': 1, 'Writing': 2, 'Female_speech_and_woman_speaking': 3, 'Tap': 4, 'Child_speech_and_kid_speaking': 5, 'Screaming': 6, 'Meow': 7, 'Scissors': 8, 'Fart': 9, 'Car_passing_by': 10, 'Harmonica': 11, 'Sink_(filling_or_washing)': 12, 'Burping_and_eructation': 13, 'Slam': 14, 'Drawer_open_or_close': 15, 'Cricket': 16, 'Hiss': 17, 'Frying_(food)': 18, 'Sneeze': 19, 'Chink_and_clink': 20, 'Fill_(with_liquid)': 21, 'Crowd': 22, 'Marimba_and_xylophone': 23, 'Sigh': 24, 'Accordion': 25, 'Electric_guitar': 26, 'Cupboard_open_or_close': 27, 'Bicycle_bell': 28, 'Waves_and_surf': 29, 'Stream': 30, 'Bus': 31, 'Toilet_flush': 32, 'Trickle_and_dribble': 33, 'Tick-tock': 34, 'Keys_jangling': 35, 'Acoustic_guitar': 36, 'Finger_snapping': 37, 'Cheering': 38, 'Race_car_and_auto_racing': 39, 'Bass_guitar': 40, 'Yell': 41, 'Water_tap_and_faucet': 42, 'Run': 43, 'Traffic_noise_and_roadway_noise': 44, 'Crackle': 45, 'Skateboard': 46, 'Glockenspiel': 47, 'Computer_keyboard': 48, 'Whispering': 49, 'Zipper_(clothing)': 50, 'Microwave_oven': 51, 'Bathtub_(filling_or_washing)': 52, 'Male_speech_and_man_speaking': 53, 'Gong': 54, 'Shatter': 55, 'Strum': 56, 'Bass_drum': 57, 'Dishes_and_pots_and_pans': 58, 'Accelerating_and_revving_and_vroom': 59, 'Male_singing': 60, 'Gurgling': 61, 'Walk_and_footsteps': 62, 'Printer': 63, 'Cutlery_and_silverware': 64, 'Chirp_and_tweet': 65, 'Clapping': 66, 'Hi-hat': 67, 'Raindrop': 68, 'Gasp': 69, 'Buzz': 70, 'Drip': 71, 'Chewing_and_mastication': 72, 'Squeak': 73, 'Female_singing': 74, 'Church_bell': 75, 'Mechanical_fan': 76, 'Purr': 77, 'Applause': 78, 'Knock': 79}
+
+def get_labels(files):
+    df = pd.read_csv("data/audio/train_curated.csv")
+    labels = []
+    for file in files:
+        x = df.loc[df['fname'] == file, 'labels'].iloc[0]
+        x = x.split(",")
+        labels.append(x)
+    # classes = {e for l in labels for e in l} # Set with all distinct labels/classes
+    # dic = {}
+    # for i, cl in enumerate(classes):
+    #     dic[cl] = i
+    # print(dic) -> see classes top of this file
+    return labels
+
+
+def save_images(data, train=True):
+    folder = "train_curated" if train else "test"
+    for key, value in data.items():
+        key = key.split('.')[0] # Remove .wav
+        im = Image.fromarray(value.astype(np.uint8))
+        # print(im.getbands())
+        im.save(f"data/images/{folder}/{key}.jpeg")
+    return
 
 class conf:
     # Preprocessing settings
@@ -47,7 +75,7 @@ def read_as_melspectrogram(conf, pathname, trim_long_data, debug_display=False):
 
 def mono_to_color(X, mean=None, std=None, norm_max=None, norm_min=None, eps=1e-6):
     # Stack X as [X,X,X]
-    X = np.stack([X, X, X], axis=-1)
+    # X = np.stack([X, X, X], axis=-1)
 
     # Standardize
     mean = mean or X.mean()

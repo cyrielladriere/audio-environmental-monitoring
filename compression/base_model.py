@@ -188,10 +188,10 @@ class MobileNetV2(nn.Module):
         """
         Input: (batch_size, data_length)"""
 
-        x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
-        x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
+        # x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
+        # x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
         
-        x = x.transpose(1, 3)
+        x = input.transpose(1, 3)
         x = self.bn0(x)
         x = x.transpose(1, 3)
         
@@ -217,3 +217,7 @@ class MobileNetV2(nn.Module):
         output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
 
         return output_dict
+    
+def loss_func(output, target):
+    loss = - torch.mean(target * output)
+    return loss
