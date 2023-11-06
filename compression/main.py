@@ -29,8 +29,8 @@ training_audio_data = "data/audio/train_curated"
 val_audio_data = "data/audio/test"
 training_audio_labels = "data/audio/train_curated.csv"
 test_audio_labels = "data/audio/sample_submission.csv"
-training_data = "train_curated"
-val_data = "test"
+training_data = "data/train_curated"
+val_data = "data/test"
 model_pth = "resources/MobileNetV2.pth"
 # ------------- Hyperparameters
 image_size = (128, 64)
