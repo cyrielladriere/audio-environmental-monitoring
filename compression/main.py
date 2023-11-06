@@ -164,7 +164,10 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs=25):
                         outputs = model(inputs)["clipwise_output"] # Ouputs: {"clipwise_output": [batch_size, num_classes], "Embedding": }
 
                         _, preds = torch.max(outputs, 1)    # Shape preds: [batch_size]
-                        loss = loss_func(outputs, labels)
+                        # loss = loss_func(outputs, labels)
+
+                        criterion = nn.BCEWithLogitsLoss()
+                        loss = criterion(outputs, labels.float())
 
                         # backward + optimize only if in training phase
                         if phase == 'train':
