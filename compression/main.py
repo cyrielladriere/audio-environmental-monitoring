@@ -21,8 +21,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # ------------- Testing Env
 PREPROCESSING = False
 BASE_MODEL = False
-BASE_MODEL_PRETRAINED = False
-QUANTIZATION = True
+BASE_MODEL_PRETRAINED = True
+QUANTIZATION = False
 PRUNING = False
 # ------------- Variables
 training_audio_data = "data/audio/train_curated"
@@ -35,7 +35,7 @@ model_pth = "resources/MobileNetV2.pth"
 # ------------- Hyperparameters
 image_size = (128, 64)
 batch_size = 64
-n_epochs = 5
+n_epochs = 15
 n_classes = 80
 classes = {'Bark': 0, 'Motorcycle': 1, 'Writing': 2, 'Female_speech_and_woman_speaking': 3, 'Tap': 4, 'Child_speech_and_kid_speaking': 5, 'Screaming': 6, 'Meow': 7, 'Scissors': 8, 'Fart': 9, 'Car_passing_by': 10, 'Harmonica': 11, 'Sink_(filling_or_washing)': 12, 'Burping_and_eructation': 13, 'Slam': 14, 'Drawer_open_or_close': 15, 'Cricket': 16, 'Hiss': 17, 'Frying_(food)': 18, 'Sneeze': 19, 'Chink_and_clink': 20, 'Fill_(with_liquid)': 21, 'Crowd': 22, 'Marimba_and_xylophone': 23, 'Sigh': 24, 'Accordion': 25, 'Electric_guitar': 26, 'Cupboard_open_or_close': 27, 'Bicycle_bell': 28, 'Waves_and_surf': 29, 'Stream': 30, 'Bus': 31, 'Toilet_flush': 32, 'Trickle_and_dribble': 33, 'Tick-tock': 34, 'Keys_jangling': 35, 'Acoustic_guitar': 36, 'Finger_snapping': 37, 'Cheering': 38, 'Race_car_and_auto_racing': 39, 'Bass_guitar': 40, 'Yell': 41, 'Water_tap_and_faucet': 42, 'Run': 43, 'Traffic_noise_and_roadway_noise': 44, 'Crackle': 45, 'Skateboard': 46, 'Glockenspiel': 47, 'Computer_keyboard': 48, 'Whispering': 49, 'Zipper_(clothing)': 50, 'Microwave_oven': 51, 'Bathtub_(filling_or_washing)': 52, 'Male_speech_and_man_speaking': 53, 'Gong': 54, 'Shatter': 55, 'Strum': 56, 'Bass_drum': 57, 'Dishes_and_pots_and_pans': 58, 'Accelerating_and_revving_and_vroom': 59, 'Male_singing': 60, 'Gurgling': 61, 'Walk_and_footsteps': 62, 'Printer': 63, 'Cutlery_and_silverware': 64, 'Chirp_and_tweet': 65, 'Clapping': 66, 'Hi-hat': 67, 'Raindrop': 68, 'Gasp': 69, 'Buzz': 70, 'Drip': 71, 'Chewing_and_mastication': 72, 'Squeak': 73, 'Female_singing': 74, 'Church_bell': 75, 'Mechanical_fan': 76, 'Purr': 77, 'Applause': 78, 'Knock': 79}
 
@@ -165,6 +165,11 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs=25):
                 running_loss = 0.0
                 running_corrects = 0
 
+                TN = 0 
+                FP = 0 
+                FN = 0 
+                TP = 0 
+
                 # Iterate over data.
                 for inputs, labels in dataloaders[phase]:
                     inputs = inputs.to(device) # Shape: [batch_size, channels, height, width]
@@ -172,15 +177,16 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs=25):
 
                     # zero the parameter gradients
                     optimizer.zero_grad()
-                    metric = BinaryAccuracy(threshold=0.7).to(device)
-                    bcm = BinaryConfusionMatrix(threshold=0.7).to(device)
+                    metric = BinaryAccuracy(threshold=0.5).to(device)
+                    bcm = BinaryConfusionMatrix(threshold=0.5).to(device)
                     
 
                     # forward
                     # track history if only in train
                     with torch.set_grad_enabled(phase == 'train'):
-                        # outputs = model(inputs)["clipwise_output"] # Ouputs: {"clipwise_output": [batch_size, num_classes], "Embedding": }
-                        outputs = model(inputs)
+                        # Outputs: {"clipwise_output": [batch_size, num_classes], "Embedding": }
+                        outputs = model(inputs)["clipwise_output"] if BASE_MODEL_PRETRAINED else model(inputs) 
+                        
 
                         # loss = loss_func(outputs, labels)
 
@@ -188,7 +194,10 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs=25):
                         loss = criterion(outputs, labels.float())
                         
                         confmat = bcm(outputs, labels)
-                        TN, FP, FN, TP = confmat[0][0], confmat[0][1], confmat[1][0], confmat[1][1]
+                        TN += confmat[0][0]
+                        FP += confmat[0][1]
+                        FN += confmat[1][0]
+                        TP += confmat[1][1]
 
                         # backward + optimize only if in training phase
                         if phase == 'train':
