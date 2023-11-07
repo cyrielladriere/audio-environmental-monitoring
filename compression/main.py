@@ -13,16 +13,16 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms, datasets
 from torchvision.models import MobileNet_V3_Large_Weights
 from torchvision.models.quantization import mobilenet_v3_large, MobileNet_V3_Large_QuantizedWeights
-from compression.quantization import QAT
-from compression.qat import qat
 from compression.evaluation import print_model_size, evaluate
-from compression.base_model import MobileNetV2, loss_func
+from compression.base_model_pretrained import MobileNetV2, loss_func
+from compression.base_model import MobileNetV3, _mobilenet_v3_conf
 from compression.preprocessing import convert_dataset, load_pkl, save_images, get_labels
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ------------- Testing Env
 PREPROCESSING = False
 BASE_MODEL = True
+BASE_MODEL_PRETRAINED = False
 QUANTIZATION = False
 PRUNING = False
 # ------------- Variables
@@ -62,18 +62,23 @@ def main():
     # val_dataloader = DataLoader(val_dataset, batch_size=batch_size)
     dataloaders = {"train": train_dataloader}
 
-
     if(BASE_MODEL):
-        # model = mobilenet_v3_large(weights=MobileNet_V3_Large_Weights.IMAGENET1K_V2).to(device=device)
-        # model = mobilenet_v3_large(weights=MobileNet_V3_Large_QuantizedWeights.DEFAULT, quantize=True).to(device=device)
-        model = MobileNetV2(3200, 1024, 320, 64, 50, 14000, 527).to(device)
-        pretrained_weights = torch.load(model_pth)["model"] # keys: {iteration: , model: }
-        model.load_state_dict(pretrained_weights, strict=False)
-        
+        inverted_residual_setting, last_channel = _mobilenet_v3_conf()
+        model = MobileNetV3(inverted_residual_setting=inverted_residual_setting, last_channel=last_channel, num_classes=80).to(device)
 
         print_model_size(model)
-        # print_model_size(model_quantized)
 
+        optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+        exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1) # Decay LR by a factor of 0.1 every 7 epochs
+        model.cuda()
+        model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
+
+    elif(BASE_MODEL_PRETRAINED):
+        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 527).to(device)
+        pretrained_weights = torch.load(model_pth)["model"] # keys: {iteration: , model: }
+        model.load_state_dict(pretrained_weights)
+
+        print_model_size(model)
 
         # Freeze weights
         for param in model.features.parameters():
@@ -165,16 +170,14 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs=25):
                     # forward
                     # track history if only in train
                     with torch.set_grad_enabled(phase == 'train'):
-                        outputs = model(inputs)["clipwise_output"] # Ouputs: {"clipwise_output": [batch_size, num_classes], "Embedding": }
+                        # outputs = model(inputs)["clipwise_output"] # Ouputs: {"clipwise_output": [batch_size, num_classes], "Embedding": }
+                        outputs = model(inputs)
 
-                        num_ones = torch.sum(labels, axis=1)    # amount of labels in each image in a batch (Tensor)
-                        
-                        _, preds = torch.max(outputs, 1)    # Shape preds: [batch_size]
                         # loss = loss_func(outputs, labels)
 
                         criterion = nn.BCELoss()
                         loss = criterion(outputs, labels.float())
-
+                        
                         confmat = bcm(outputs, labels)
                         TN, FP, FN, TP = confmat[0][0], confmat[0][1], confmat[1][0], confmat[1][1]
 
