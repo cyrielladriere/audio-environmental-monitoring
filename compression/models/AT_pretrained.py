@@ -416,6 +416,7 @@ class MN(nn.Module):
             nn.Hardswish(inplace=True),
             nn.Dropout(p=dropout, inplace=True),
             nn.Linear(last_channel, num_classes),
+            nn.Sigmoid()
         )
         # else:
         #     raise NotImplementedError(f"Head '{self.head_type}' unknown. Must be one of: 'mlp', "

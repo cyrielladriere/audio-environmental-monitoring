@@ -76,12 +76,19 @@ def main():
         model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
     elif(MODEL_AT):
         inverted_residual_setting, last_channel = _mn_conf()
-        model = MN(inverted_residual_setting=inverted_residual_setting, last_channel=last_channel, num_classes=80).to(device)
+        model = MN(inverted_residual_setting=inverted_residual_setting, last_channel=last_channel, num_classes=527).to(device)
         pretrained_weights = torch.load(model_at)
-        model.load_state_dict(pretrained_weights)
+        model.load_state_dict(pretrained_weights, strict=False)
 
         print_model_size(model)
-        return
+
+        # Freeze weights
+        for param in model.features.parameters():
+            param.requires_grad = False
+
+        # Initialize layers that are not frozen
+        model.classifier[2] = nn.Linear(in_features=960, out_features=1280, bias=True)   
+        model.classifier[5] = nn.Linear(1280, n_classes, bias=True)
 
         optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
         exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1) # Decay LR by a factor of 0.1 every 7 epochs
@@ -199,8 +206,14 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs=25):
                     # forward
                     # track history if only in train
                     with torch.set_grad_enabled(phase == 'train'):
-                        # Outputs: {"clipwise_output": [batch_size, num_classes], "Embedding": }
-                        outputs = model(inputs)["clipwise_output"] if MODEL_PANN else model(inputs) 
+                        if MODEL_PANN:
+                            # Outputs: {"clipwise_output": [batch_size, num_classes], "Embedding": }
+                            outputs = model(inputs)["clipwise_output"]
+                        elif MODEL_AT:
+                            outputs = model(inputs)[0]
+                        else:
+                            outputs = model(inputs)
+
                         # if(epoch == 5 or epoch == 10 or epoch == 1):
                         #     print(torch.max(model.fc1.weight))
 
