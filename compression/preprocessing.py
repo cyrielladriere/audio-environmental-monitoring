@@ -33,8 +33,7 @@ def save_images(data, train=True):
     for key, value in data.items():
         key = key.split('.')[0] # Remove .wav
         im = Image.fromarray(value.astype(np.uint8))
-        # print(im.getbands())
-        im.save(f"data/images/{folder}/{key}.jpeg")
+        im.save(f"data/images_3D/{folder}/{key}.jpeg")
     return
 
 class conf:
@@ -82,7 +81,7 @@ def read_as_melspectrogram(conf, pathname, trim_long_data, debug_display=False):
 
 def mono_to_color(X, mean=None, std=None, norm_max=None, norm_min=None, eps=1e-6):
     # Stack X as [X,X,X]
-    X = np.stack([X, X, X], axis=-1)
+    # X = np.stack([X, X, X], axis=-1)
 
     # Standardize
     mean = mean or X.mean()

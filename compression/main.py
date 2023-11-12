@@ -23,8 +23,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # ------------- Testing Env
 PREPROCESSING = False
 BASE_MODEL = False
-MODEL_AT = True
-MODEL_PANN = False
+MODEL_AT = False
+MODEL_PANN = True
 QUANTIZATION = False
 PRUNING = False
 # ------------- Variables
@@ -37,7 +37,7 @@ val_data = "data/test"
 model_pann = "resources/MobileNetV2.pth"
 model_at = "resources/mn10_as.pt"
 # ------------- Hyperparameters
-image_size = (128, 64)
+image_size = (256, 128)
 batch_size = 64
 n_epochs = 100
 n_classes = 80
@@ -45,10 +45,10 @@ classes = {'Bark': 0, 'Motorcycle': 1, 'Writing': 2, 'Female_speech_and_woman_sp
 
 def main():
     if(PREPROCESSING):
-        # convert_dataset(pd.read_csv(training_audio_labels), training_audio_data, training_data) 
+        convert_dataset(pd.read_csv(training_audio_labels), training_audio_data, training_data) 
         # convert_dataset(pd.read_csv(test_audio_labels), val_audio_data, val_data)
-        data = load_pkl(training_data)
-        save_images(data, True)
+        # data = load_pkl(training_data)
+        # save_images(data, True)
         # print(train["0a9bebde.wav"].shape)
     transform = transforms.Compose([
         transforms.Resize(image_size),
@@ -77,8 +77,8 @@ def main():
 
         print_model_size(model)
 
-        optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
-        exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1) # Decay LR by a factor of 0.1 every 7 epochs
+        optimizer = optim.Adam(model.parameters(), lr=0.001)
+        exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
         model.cuda()
         model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
     elif(MODEL_AT):
@@ -97,8 +97,8 @@ def main():
         model.classifier[2] = nn.Linear(in_features=960, out_features=1280, bias=True)   
         model.classifier[5] = nn.Linear(1280, n_classes, bias=True)
 
-        optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
-        exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1) # Decay LR by a factor of 0.1 every 7 epochs
+        optimizer = optim.Adam(model.parameters(), lr=0.001)
+        exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
         model.cuda()
         model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
     elif(MODEL_PANN):
@@ -113,12 +113,13 @@ def main():
             param.requires_grad = False
 
         # Initialize layers that are not frozen
+        model.bn0 = nn.BatchNorm2d(128)
         model.fc1 = nn.Linear(in_features=1280, out_features=256, bias=True)    # out_features tested: 1024(pretty bad), 512(ok), 128(okok)
         model.fc_audioset = nn.Linear(256, n_classes, bias=True)
         
        
-        optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
-        exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1) # Decay LR by a factor of 0.1 every 7 epochs
+        optimizer = optim.Adam(model.parameters(), lr=0.001)
+        exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
         model.cuda()
         model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
 
@@ -135,8 +136,8 @@ def main():
         qat_model.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
         torch.ao.quantization.prepare_qat(qat_model, inplace=True)
         
-        optimizer = optim.SGD(qat_model.parameters(), lr=0.001, momentum=0.9)
-        exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1) # Decay LR by a factor of 0.1 every 7 epochs
+        optimizer = optim.Adam(model.parameters(), lr=0.001)
+        exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
         qat_model.cuda()
         qat_model = train_model(qat_model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
 
@@ -160,6 +161,7 @@ class TrainDataset(Dataset):
     
     def __getitem__(self, idx):
         image = Image.fromarray(self.mels[idx], mode='L') # Grayscale
+        # image = Image.fromarray(self.mels[idx], mode='RGB') # RGB
         image = self.transforms(image).div_(255)
         
         label = self.labels[idx]
@@ -180,7 +182,7 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs=25):
 
         torch.save(model.state_dict(), best_model_params_path)
         best_lwlrap = 0.0
-        
+        best_epoch = 0
 
         for epoch in range(1, num_epochs+1):
             print(f'Epoch {epoch}/{num_epochs}')
@@ -272,6 +274,7 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs=25):
                 # deep copy the model
                 if phase == 'val' and lwlrap > best_lwlrap:
                     best_lwlrap = lwlrap
+                    best_epoch = epoch
                     torch.save(model.state_dict(), best_model_params_path)
                 
 
@@ -279,7 +282,7 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs=25):
 
         time_elapsed = time.time() - since
         print(f'Training complete in {time_elapsed // 60:.0f}m {time_elapsed % 60:.0f}s')
-        print(f'Best lwlrap: {best_lwlrap:4f}')
+        print(f'Best lwlrap: {best_lwlrap:4f} in epoch: {best_epoch}')
 
         # load best model weights
         model.load_state_dict(torch.load(best_model_params_path))
