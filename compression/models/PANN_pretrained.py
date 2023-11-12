@@ -213,7 +213,7 @@ class MobileNetV2(nn.Module):
         x = F.relu_(self.fc1(x))
         embedding = F.dropout(x, p=0.5, training=self.training)
 
-        clipwise_output = torch.sigmoid(self.fc_audioset(x))
+        clipwise_output = self.fc_audioset(x)
         
         output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
 
