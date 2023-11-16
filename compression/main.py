@@ -1,6 +1,7 @@
 # https://www.kaggle.com/code/daisukelab/cnn-2d-basic-solution-powered-by-fast-ai
 import pandas as pd
 import numpy as np
+from functools import partial
 from sklearn.model_selection import train_test_split
 import torch
 import time
@@ -12,9 +13,10 @@ from PIL import Image
 from tempfile import TemporaryDirectory
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms, datasets
+from torchvision.models import MobileNet_V3_Large_Weights, mobilenet_v3_large
 from compression.evaluation import print_model_size, evaluate
 from compression.models.PANN_pretrained import MobileNetV2, loss_func
-from compression.models.base_model import MobileNetV3, _mobilenet_v3_conf
+from compression.models.base_model import Conv2dNormActivation, MobileNetV3, _mobilenet_v3_conf
 from compression.models.AT_pretrained import MN, _mn_conf
 from compression.preprocessing import convert_dataset, load_pkl, save_images, get_labels, convert_labels
 from compression.models.quantized_model import QuantizableMobileNetV3
@@ -22,8 +24,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ------------- Testing Env
 PREPROCESSING = False
-BASE_MODEL = False
-MODEL_AT = True
+BASE_MODEL = True
+MODEL_AT = False
 MODEL_PANN = False
 QUANTIZATION = False
 PRUNING = False
@@ -72,10 +74,27 @@ def main():
     dataloaders = {"train": train_dataloader, "val": val_dataloader}
 
     if(BASE_MODEL):
-        inverted_residual_setting, last_channel = _mobilenet_v3_conf()
-        model = MobileNetV3(inverted_residual_setting=inverted_residual_setting, last_channel=last_channel, num_classes=80).to(device)
+        # Error: in_channels should be 3 and it is 1 (cuz we use grayscale not rgb)
+        model = mobilenet_v3_large(weights=MobileNet_V3_Large_Weights.IMAGENET1K_V2).to(device=device)
 
         print_model_size(model)
+        # print(model)
+    
+        # Freeze weights
+        for param in model.features.parameters():
+            param.requires_grad = False
+
+        # Initialize layers that are not frozen
+        model.features[0] = Conv2dNormActivation(
+                1,
+                16,
+                kernel_size=3,
+                stride=2,
+                norm_layer=partial(nn.BatchNorm2d, eps=0.001, momentum=0.01),
+                activation_layer=nn.Hardswish,
+            )
+        model.classifier[0] = nn.Linear(in_features=960, out_features=1280, bias=True)   
+        model.classifier[3] = nn.Linear(1280, n_classes, bias=True)
 
         optimizer = optim.Adam(model.parameters(), lr=0.001)
         exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
