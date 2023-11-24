@@ -7,6 +7,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torchlibrosa.stft import Spectrogram, LogmelFilterBank
 from torchlibrosa.augmentation import SpecAugmentation
+from torch.ao.quantization import DeQuantStub, QuantStub
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def do_mixup(x, mixup_lambda):
@@ -91,9 +92,13 @@ class InvertedResidual(nn.Module):
 
 class MobileNetV2(nn.Module):
     def __init__(self, sample_rate, window_size, hop_size, mel_bins, fmin, 
-        fmax, classes_num):
+        fmax, classes_num, quantize=False):
+        self.quantize = quantize
         
         super(MobileNetV2, self).__init__()
+        if quantize:
+            self.quant = QuantStub()
+            self.dequant = DeQuantStub()
 
         window = 'hann'
         center = True
@@ -191,6 +196,9 @@ class MobileNetV2(nn.Module):
         # x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
         # x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
         
+        if self.quantize:
+            input = self.quant(input)
+
         x = input.transpose(1, 3)
         x = self.bn0(x)
         x = x.transpose(1, 3)
@@ -214,6 +222,9 @@ class MobileNetV2(nn.Module):
         embedding = F.dropout(x, p=0.5, training=self.training)
 
         clipwise_output = self.fc_audioset(x)
+
+        if self.quantize:
+            clipwise_output = self.dequant(clipwise_output)
         
         output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
 

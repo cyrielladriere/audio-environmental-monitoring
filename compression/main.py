@@ -1,4 +1,3 @@
-# https://www.kaggle.com/code/daisukelab/cnn-2d-basic-solution-powered-by-fast-ai
 import pandas as pd
 import numpy as np
 from functools import partial
@@ -24,11 +23,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ------------- Testing Env
 PREPROCESSING = False
-BASE_MODEL = True
+BASE_MODEL = False
 MODEL_AT = False
 MODEL_PANN = False
 QUANTIZATION = False
-PRUNING = False
+QUANTIZATION_PANN = True
 # ------------- Variables
 training_audio_data = "data/audio/train_curated"
 val_audio_data = "data/audio/test"
@@ -41,7 +40,7 @@ model_at = "resources/mn10_as.pt"
 # ------------- Hyperparameters
 image_size = (256, 128)
 batch_size = 64
-n_epochs = 200
+n_epochs = 300
 n_classes = 80
 classes = {'Bark': 0, 'Motorcycle': 1, 'Writing': 2, 'Female_speech_and_woman_speaking': 3, 'Tap': 4, 'Child_speech_and_kid_speaking': 5, 'Screaming': 6, 'Meow': 7, 'Scissors': 8, 'Fart': 9, 'Car_passing_by': 10, 'Harmonica': 11, 'Sink_(filling_or_washing)': 12, 'Burping_and_eructation': 13, 'Slam': 14, 'Drawer_open_or_close': 15, 'Cricket': 16, 'Hiss': 17, 'Frying_(food)': 18, 'Sneeze': 19, 'Chink_and_clink': 20, 'Fill_(with_liquid)': 21, 'Crowd': 22, 'Marimba_and_xylophone': 23, 'Sigh': 24, 'Accordion': 25, 'Electric_guitar': 26, 'Cupboard_open_or_close': 27, 'Bicycle_bell': 28, 'Waves_and_surf': 29, 'Stream': 30, 'Bus': 31, 'Toilet_flush': 32, 'Trickle_and_dribble': 33, 'Tick-tock': 34, 'Keys_jangling': 35, 'Acoustic_guitar': 36, 'Finger_snapping': 37, 'Cheering': 38, 'Race_car_and_auto_racing': 39, 'Bass_guitar': 40, 'Yell': 41, 'Water_tap_and_faucet': 42, 'Run': 43, 'Traffic_noise_and_roadway_noise': 44, 'Crackle': 45, 'Skateboard': 46, 'Glockenspiel': 47, 'Computer_keyboard': 48, 'Whispering': 49, 'Zipper_(clothing)': 50, 'Microwave_oven': 51, 'Bathtub_(filling_or_washing)': 52, 'Male_speech_and_man_speaking': 53, 'Gong': 54, 'Shatter': 55, 'Strum': 56, 'Bass_drum': 57, 'Dishes_and_pots_and_pans': 58, 'Accelerating_and_revving_and_vroom': 59, 'Male_singing': 60, 'Gurgling': 61, 'Walk_and_footsteps': 62, 'Printer': 63, 'Cutlery_and_silverware': 64, 'Chirp_and_tweet': 65, 'Clapping': 66, 'Hi-hat': 67, 'Raindrop': 68, 'Gasp': 69, 'Buzz': 70, 'Drip': 71, 'Chewing_and_mastication': 72, 'Squeak': 73, 'Female_singing': 74, 'Church_bell': 75, 'Mechanical_fan': 76, 'Purr': 77, 'Applause': 78, 'Knock': 79}
 
@@ -142,10 +141,41 @@ def main():
         model.cuda()
         model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
 
+        torch.save(model.state_dict(), "resources/model_pann.pt")
         # top1, top5, inference_time = evaluate(model, val_dataloader, classes)
         # print(f"Evaluation accuracy on {len(val_dataset)} images: {top1}, {top5}")
         # print("Average inference time: %.4fs" %(inference_time/len(val_dataset)))
 
+    elif(QUANTIZATION_PANN):
+        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 527, True).to(device)
+        pretrained_weights = torch.load(model_pann)["model"] # keys: {iteration: , model: }
+        model.load_state_dict(pretrained_weights)
+
+        print_model_size(model)
+
+        # Freeze weights
+        for param in model.features.parameters():
+            param.requires_grad = False
+
+        # Initialize layers that are not frozen
+        model.bn0 = nn.BatchNorm2d(128)
+        model.fc1 = nn.Linear(in_features=1280, out_features=256, bias=True)    # out_features tested: 1024(pretty bad), 512(ok), 128(okok)
+        model.fc_audioset = nn.Linear(256, n_classes, bias=True)
+
+        model.cuda()
+        model.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
+        torch.ao.quantization.prepare_qat(model, inplace=True)
+       
+        optimizer = optim.Adam(model.parameters(), lr=0.001)
+        exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
+        
+        model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
+
+        model.to("cpu") # Needed for quatization convert
+        model_qat = torch.quantization.convert(model.eval(), inplace=False)
+
+        torch.save(model_qat.state_dict(), "resources/model_pann_qat.pt")
+        print_model_size(model_qat)
     elif(QUANTIZATION):
         inverted_residual_setting, last_channel = _mobilenet_v3_conf()
         qat_model = QuantizableMobileNetV3(inverted_residual_setting=inverted_residual_setting, last_channel=last_channel, num_classes=80).to(device)
@@ -155,7 +185,7 @@ def main():
         qat_model.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
         torch.ao.quantization.prepare_qat(qat_model, inplace=True)
         
-        optimizer = optim.Adam(model.parameters(), lr=0.001)
+        optimizer = optim.Adam(qat_model.parameters(), lr=0.001)
         exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
         qat_model.cuda()
         qat_model = train_model(qat_model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
@@ -239,7 +269,7 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs=25):
                     # forward
                     # track history if only in train
                     with torch.set_grad_enabled(phase == 'train'):
-                        if MODEL_PANN:
+                        if MODEL_PANN or QUANTIZATION_PANN:
                             # Outputs: {"clipwise_output": [batch_size, num_classes], "Embedding": }
                             outputs = model(inputs)["clipwise_output"]
                         elif MODEL_AT:
