@@ -24,10 +24,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # ------------- Testing Env
 PREPROCESSING = False
 BASE_MODEL = False
-MODEL_AT = False
+MODEL_AT = True
 MODEL_PANN = False
 QUANTIZATION = False
-QUANTIZATION_PANN = True
+QUANTIZATION_PANN = False
 # ------------- Variables
 training_audio_data = "data/audio/train_curated"
 val_audio_data = "data/audio/test"
@@ -39,8 +39,9 @@ model_pann = "resources/MobileNetV2.pth"
 model_at = "resources/mn10_as.pt"
 # ------------- Hyperparameters
 image_size = (256, 128)
+threshold = 0.5
 batch_size = 64
-n_epochs = 300
+n_epochs = 100
 n_classes = 80
 classes = {'Bark': 0, 'Motorcycle': 1, 'Writing': 2, 'Female_speech_and_woman_speaking': 3, 'Tap': 4, 'Child_speech_and_kid_speaking': 5, 'Screaming': 6, 'Meow': 7, 'Scissors': 8, 'Fart': 9, 'Car_passing_by': 10, 'Harmonica': 11, 'Sink_(filling_or_washing)': 12, 'Burping_and_eructation': 13, 'Slam': 14, 'Drawer_open_or_close': 15, 'Cricket': 16, 'Hiss': 17, 'Frying_(food)': 18, 'Sneeze': 19, 'Chink_and_clink': 20, 'Fill_(with_liquid)': 21, 'Crowd': 22, 'Marimba_and_xylophone': 23, 'Sigh': 24, 'Accordion': 25, 'Electric_guitar': 26, 'Cupboard_open_or_close': 27, 'Bicycle_bell': 28, 'Waves_and_surf': 29, 'Stream': 30, 'Bus': 31, 'Toilet_flush': 32, 'Trickle_and_dribble': 33, 'Tick-tock': 34, 'Keys_jangling': 35, 'Acoustic_guitar': 36, 'Finger_snapping': 37, 'Cheering': 38, 'Race_car_and_auto_racing': 39, 'Bass_guitar': 40, 'Yell': 41, 'Water_tap_and_faucet': 42, 'Run': 43, 'Traffic_noise_and_roadway_noise': 44, 'Crackle': 45, 'Skateboard': 46, 'Glockenspiel': 47, 'Computer_keyboard': 48, 'Whispering': 49, 'Zipper_(clothing)': 50, 'Microwave_oven': 51, 'Bathtub_(filling_or_washing)': 52, 'Male_speech_and_man_speaking': 53, 'Gong': 54, 'Shatter': 55, 'Strum': 56, 'Bass_drum': 57, 'Dishes_and_pots_and_pans': 58, 'Accelerating_and_revving_and_vroom': 59, 'Male_singing': 60, 'Gurgling': 61, 'Walk_and_footsteps': 62, 'Printer': 63, 'Cutlery_and_silverware': 64, 'Chirp_and_tweet': 65, 'Clapping': 66, 'Hi-hat': 67, 'Raindrop': 68, 'Gasp': 69, 'Buzz': 70, 'Drip': 71, 'Chewing_and_mastication': 72, 'Squeak': 73, 'Female_singing': 74, 'Church_bell': 75, 'Mechanical_fan': 76, 'Purr': 77, 'Applause': 78, 'Knock': 79}
 
@@ -108,8 +109,8 @@ def main():
         print_model_size(model)
 
         # Freeze weights
-        for param in model.features.parameters():
-            param.requires_grad = False
+        # for param in model.features.parameters():
+        #     param.requires_grad = False
 
         # Initialize layers that are not frozen
         model.classifier[2] = nn.Linear(in_features=960, out_features=1280, bias=True)   
@@ -126,9 +127,9 @@ def main():
 
         print_model_size(model)
 
-        # Freeze weights
-        for param in model.features.parameters():
-            param.requires_grad = False
+        # Freeze weights -> worse performance: best lwlrap of 70 in 300 epochs
+        # for param in model.features.parameters():
+        #     param.requires_grad = False
 
         # Initialize layers that are not frozen
         model.bn0 = nn.BatchNorm2d(128)
@@ -234,6 +235,7 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs=25):
         best_epoch = 0
 
         for epoch in range(1, num_epochs+1):
+            start_epoch = time.time()
             print(f'Epoch {epoch}/{num_epochs}')
             print('-' * 10)
 
@@ -263,8 +265,8 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs=25):
 
                     # zero the parameter gradients
                     optimizer.zero_grad()
-                    metric = BinaryAccuracy(threshold=0.5).to(device)
-                    bcm = BinaryConfusionMatrix(threshold=0.5).to(device)
+                    metric = BinaryAccuracy(threshold=threshold).to(device)
+                    bcm = BinaryConfusionMatrix(threshold=threshold).to(device)
                     
                     # forward
                     # track history if only in train
@@ -313,12 +315,13 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs=25):
                 precision = TP/(TP+FP)
                 recall = TP/(TP+FN)
                 F1 = (2*precision*recall)/(precision+recall)
-                print(f'{phase} Loss: {epoch_loss:.4f} {phase} avg loss: {avg_loss:.4f} Acc: {epoch_acc:.4f} Precision: {precision:.4f} Recall: {recall:.4f} F1: {F1:.4f} TN: {TN} FP: {FP} FN: {FN} TP: {TP}')
+                print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f} Precision: {precision:.4f} Recall: {recall:.4f} F1: {F1:.4f} TN: {TN} FP: {FP} FN: {FN} TP: {TP}')
                 
                 if phase == 'val':
                     score, weight = calculate_per_class_lwlrap(y_val, valid_preds)
                     lwlrap = (score * weight).sum()
-                    print(f"val_lwlrap: {lwlrap:.6f}")
+                    end_epoch = time.time()
+                    print(f"val_lwlrap: {lwlrap:.6f} epoch time: {end_epoch-start_epoch:.2f}s")
 
                 # deep copy the model
                 if phase == 'val' and lwlrap > best_lwlrap:
