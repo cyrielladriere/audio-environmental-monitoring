@@ -23,6 +23,7 @@ from compression.preprocessing import convert_dataset, load_pkl, save_images, ge
 from compression.models.quantized_model import QuantizableMobileNetV3
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # ------------- Testing Env
+TENSORBOARD = True
 PREPROCESSING = False
 BASE_MODEL = False
 MODEL_AT = False
@@ -104,7 +105,7 @@ def main():
     elif(MODEL_AT):
         # Tensorboard
         today = datetime.now()
-        writer = SummaryWriter("compression/runs/AT", filename_suffix=today.strftime("%b%d_%y-%H-%M"))
+        writer = SummaryWriter(f"compression/runs/AT/{today.strftime('%b%d_%y-%H-%M')}")
 
         inverted_residual_setting, last_channel = _mn_conf()
         model = MN(inverted_residual_setting=inverted_residual_setting, last_channel=last_channel, num_classes=527).to(device)
@@ -131,7 +132,7 @@ def main():
     elif(MODEL_PANN):
         # Tensorboard
         today = datetime.now()
-        writer = SummaryWriter("compression/runs/PANN", filename_suffix=today.strftime("%b%d_%y-%H-%M"))
+        writer = SummaryWriter(f"compression/runs/PANN/{today.strftime('%b%d_%y-%H-%M')}")
 
         model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 527).to(device)
         pretrained_weights = torch.load(model_pann)["model"] # keys: {iteration: , model: }
@@ -164,7 +165,7 @@ def main():
     elif(QUANTIZATION_PANN):
         # Tensorboard
         today = datetime.now()
-        writer = SummaryWriter("compression/runs/PANN_QAT", filename_suffix=today.strftime("%b%d_%y-%H-%M"))
+        writer = SummaryWriter(f"compression/runs/PANN_QAT/{today.strftime('%b%d_%y-%H-%M')}")
 
         model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 527, True).to(device)
         pretrained_weights = torch.load(model_pann)["model"] # keys: {iteration: , model: }
@@ -246,20 +247,6 @@ class TrainDataset(Dataset):
 
 def train_model(model, dataloaders, optimizer, scheduler, num_epochs, writer):
     since = time.time()
-
-    trn_labels = []
-    for label in y_trn:
-        one_hot_vector = np.zeros(len(classes), dtype=int)
-        one_hot_vector[label] = 1
-        trn_labels.append(one_hot_vector)
-    trn_truth = np.array(trn_labels)
-
-    val_labels = []
-    for label in y_val:
-        one_hot_vector = np.zeros(len(classes), dtype=int)
-        one_hot_vector[label] = 1
-        val_labels.append(one_hot_vector)
-    val_truth = np.array(val_labels)
 
     # Create a temporary directory to save training checkpoints
     with TemporaryDirectory() as tempdir:
@@ -384,13 +371,31 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs, writer):
         print(f'Training complete in {time_elapsed // 60:.0f}m {time_elapsed % 60:.0f}s')
         print(f'Best lwlrap: {best_lwlrap:4f} in epoch: {best_epoch}')
 
+        trn_labels = []
+        for label in y_trn:
+            one_hot_vector = np.zeros(len(classes), dtype=int)
+            one_hot_vector[label] = 1
+            trn_labels.append(one_hot_vector)
+        trn_truth = np.array(trn_labels)
+
+        val_labels = []
+        for label in y_val:
+            one_hot_vector = np.zeros(len(classes), dtype=int)
+            one_hot_vector[label] = 1
+            val_labels.append(one_hot_vector)
+        val_truth = np.array(val_labels)
+
         for cl, id in classes.items():
             tensorboard_truth = (trn_truth[:, id] == 1).astype(int)
             tensorboard_probs = train_preds[:, id]
+            # print(tensorboard_truth)
+            # print(np.sort(tensorboard_probs)[::-1][:10])
             writer.add_pr_curve(f"{cl}/train", tensorboard_truth, tensorboard_probs)
 
             tensorboard_truth = (val_truth[:, id] == 1).astype(int)
             tensorboard_probs = valid_preds[:, id]
+            # print(tensorboard_truth)
+            # print(tensorboard_probs)
             writer.add_pr_curve(f"{cl}/val", tensorboard_truth, tensorboard_probs)
 
         # load best model weights
