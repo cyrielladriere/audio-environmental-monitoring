@@ -63,7 +63,7 @@ def main():
 
     labels = convert_labels(labels)
 
-    global y_val, x_val
+    global x_trn, y_trn, y_val, x_val
 
     x_trn, x_val, y_trn, y_val = train_test_split(list(data.values()), labels, test_size=0.2)
     
@@ -247,6 +247,20 @@ class TrainDataset(Dataset):
 def train_model(model, dataloaders, optimizer, scheduler, num_epochs, writer):
     since = time.time()
 
+    trn_labels = []
+    for label in y_trn:
+        one_hot_vector = np.zeros(len(classes), dtype=int)
+        one_hot_vector[label] = 1
+        trn_labels.append(one_hot_vector)
+    trn_truth = np.array(trn_labels)
+
+    val_labels = []
+    for label in y_val:
+        one_hot_vector = np.zeros(len(classes), dtype=int)
+        one_hot_vector[label] = 1
+        val_labels.append(one_hot_vector)
+    val_truth = np.array(val_labels)
+
     # Create a temporary directory to save training checkpoints
     with TemporaryDirectory() as tempdir:
         best_model_params_path = os.path.join(tempdir, 'best_model_params.pt')
@@ -261,6 +275,7 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs, writer):
             print('-' * 10)
 
             valid_preds = np.zeros((len(x_val), len(classes)))
+            train_preds = np.zeros((len(x_trn), len(classes)))
 
             # Each epoch has a training and validation phase
             for phase in ['train', 'val']:
@@ -318,6 +333,8 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs, writer):
                     outputs = torch.sigmoid(outputs)
                     if phase == 'val':
                         valid_preds[i * batch_size: (i+1) * batch_size] = outputs.cpu().numpy()
+                    else:
+                        train_preds[i * batch_size: (i+1) * batch_size] = outputs.detach().cpu().numpy()
                     confmat = bcm(outputs, labels)
                     TN += confmat[0][0]
                     FP += confmat[0][1]
@@ -354,19 +371,27 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs, writer):
                     end_epoch = time.time()
                     print(f"val_lwlrap: {lwlrap:.6f} epoch time: {end_epoch-start_epoch:.2f}s")
                     writer.add_scalar(f"val_lwlrap", lwlrap, epoch)
+                    writer.add_scalar(f"time", end_epoch-start_epoch, epoch)
 
                 # deep copy the model
                 if phase == 'val' and lwlrap > best_lwlrap:
                     best_lwlrap = lwlrap
                     best_epoch = epoch
                     torch.save(model.state_dict(), best_model_params_path)
-                
-
             print()
 
         time_elapsed = time.time() - since
         print(f'Training complete in {time_elapsed // 60:.0f}m {time_elapsed % 60:.0f}s')
         print(f'Best lwlrap: {best_lwlrap:4f} in epoch: {best_epoch}')
+
+        for cl, id in classes.items():
+            tensorboard_truth = (trn_truth[:, id] == 1).astype(int)
+            tensorboard_probs = train_preds[:, id]
+            writer.add_pr_curve(f"{cl}/train", tensorboard_truth, tensorboard_probs)
+
+            tensorboard_truth = (val_truth[:, id] == 1).astype(int)
+            tensorboard_probs = valid_preds[:, id]
+            writer.add_pr_curve(f"{cl}/val", tensorboard_truth, tensorboard_probs)
 
         # load best model weights
         model.load_state_dict(torch.load(best_model_params_path))
