@@ -1,5 +1,7 @@
+from torch.utils.tensorboard import SummaryWriter
 import pandas as pd
 import numpy as np
+from datetime import datetime
 from functools import partial
 from sklearn.model_selection import train_test_split
 import torch
@@ -20,12 +22,11 @@ from compression.models.AT_pretrained import MN, _mn_conf
 from compression.preprocessing import convert_dataset, load_pkl, save_images, get_labels, convert_labels
 from compression.models.quantized_model import QuantizableMobileNetV3
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 # ------------- Testing Env
 PREPROCESSING = False
 BASE_MODEL = False
-MODEL_AT = True
-MODEL_PANN = False
+MODEL_AT = False
+MODEL_PANN = True
 QUANTIZATION = False
 QUANTIZATION_PANN = False
 # ------------- Variables
@@ -41,7 +42,7 @@ model_at = "resources/mn10_as.pt"
 image_size = (256, 128)
 threshold = 0.5
 batch_size = 64
-n_epochs = 100
+n_epochs = 10
 n_classes = 80
 classes = {'Bark': 0, 'Motorcycle': 1, 'Writing': 2, 'Female_speech_and_woman_speaking': 3, 'Tap': 4, 'Child_speech_and_kid_speaking': 5, 'Screaming': 6, 'Meow': 7, 'Scissors': 8, 'Fart': 9, 'Car_passing_by': 10, 'Harmonica': 11, 'Sink_(filling_or_washing)': 12, 'Burping_and_eructation': 13, 'Slam': 14, 'Drawer_open_or_close': 15, 'Cricket': 16, 'Hiss': 17, 'Frying_(food)': 18, 'Sneeze': 19, 'Chink_and_clink': 20, 'Fill_(with_liquid)': 21, 'Crowd': 22, 'Marimba_and_xylophone': 23, 'Sigh': 24, 'Accordion': 25, 'Electric_guitar': 26, 'Cupboard_open_or_close': 27, 'Bicycle_bell': 28, 'Waves_and_surf': 29, 'Stream': 30, 'Bus': 31, 'Toilet_flush': 32, 'Trickle_and_dribble': 33, 'Tick-tock': 34, 'Keys_jangling': 35, 'Acoustic_guitar': 36, 'Finger_snapping': 37, 'Cheering': 38, 'Race_car_and_auto_racing': 39, 'Bass_guitar': 40, 'Yell': 41, 'Water_tap_and_faucet': 42, 'Run': 43, 'Traffic_noise_and_roadway_noise': 44, 'Crackle': 45, 'Skateboard': 46, 'Glockenspiel': 47, 'Computer_keyboard': 48, 'Whispering': 49, 'Zipper_(clothing)': 50, 'Microwave_oven': 51, 'Bathtub_(filling_or_washing)': 52, 'Male_speech_and_man_speaking': 53, 'Gong': 54, 'Shatter': 55, 'Strum': 56, 'Bass_drum': 57, 'Dishes_and_pots_and_pans': 58, 'Accelerating_and_revving_and_vroom': 59, 'Male_singing': 60, 'Gurgling': 61, 'Walk_and_footsteps': 62, 'Printer': 63, 'Cutlery_and_silverware': 64, 'Chirp_and_tweet': 65, 'Clapping': 66, 'Hi-hat': 67, 'Raindrop': 68, 'Gasp': 69, 'Buzz': 70, 'Drip': 71, 'Chewing_and_mastication': 72, 'Squeak': 73, 'Female_singing': 74, 'Church_bell': 75, 'Mechanical_fan': 76, 'Purr': 77, 'Applause': 78, 'Knock': 79}
 
@@ -101,6 +102,10 @@ def main():
         model.cuda()
         model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
     elif(MODEL_AT):
+        # Tensorboard
+        today = datetime.now()
+        writer = SummaryWriter("compression/runs/AT", filename_suffix=today.strftime("%b%d_%y-%H-%M"))
+
         inverted_residual_setting, last_channel = _mn_conf()
         model = MN(inverted_residual_setting=inverted_residual_setting, last_channel=last_channel, num_classes=527).to(device)
         pretrained_weights = torch.load(model_at)
@@ -113,14 +118,21 @@ def main():
         #     param.requires_grad = False
 
         # Initialize layers that are not frozen
-        model.classifier[2] = nn.Linear(in_features=960, out_features=1280, bias=True)   
-        model.classifier[5] = nn.Linear(1280, n_classes, bias=True)
+        model.classifier[2] = nn.Linear(in_features=960, out_features=512, bias=True)   # out_features: 1280(bad), 512
+        model.classifier[5] = nn.Linear(512, n_classes, bias=True)
 
         optimizer = optim.Adam(model.parameters(), lr=0.001)
         exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
         model.cuda()
-        model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
+        model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, writer)
+
+        writer.flush()
+        writer.close()
     elif(MODEL_PANN):
+        # Tensorboard
+        today = datetime.now()
+        writer = SummaryWriter("compression/runs/PANN", filename_suffix=today.strftime("%b%d_%y-%H-%M"))
+
         model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 527).to(device)
         pretrained_weights = torch.load(model_pann)["model"] # keys: {iteration: , model: }
         model.load_state_dict(pretrained_weights)
@@ -140,14 +152,20 @@ def main():
         optimizer = optim.Adam(model.parameters(), lr=0.001)
         exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
         model.cuda()
-        model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
+        model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, writer)
 
+        writer.flush()
+        writer.close()
         torch.save(model.state_dict(), "resources/model_pann.pt")
         # top1, top5, inference_time = evaluate(model, val_dataloader, classes)
         # print(f"Evaluation accuracy on {len(val_dataset)} images: {top1}, {top5}")
         # print("Average inference time: %.4fs" %(inference_time/len(val_dataset)))
 
     elif(QUANTIZATION_PANN):
+        # Tensorboard
+        today = datetime.now()
+        writer = SummaryWriter("compression/runs/PANN_QAT", filename_suffix=today.strftime("%b%d_%y-%H-%M"))
+
         model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 527, True).to(device)
         pretrained_weights = torch.load(model_pann)["model"] # keys: {iteration: , model: }
         model.load_state_dict(pretrained_weights)
@@ -170,7 +188,10 @@ def main():
         optimizer = optim.Adam(model.parameters(), lr=0.001)
         exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
         
-        model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
+        model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, writer)
+
+        writer.flush()
+        writer.close()
 
         model.to("cpu") # Needed for quatization convert
         model_qat = torch.quantization.convert(model.eval(), inplace=False)
@@ -223,7 +244,7 @@ class TrainDataset(Dataset):
 
         return image, one_hot_vector
 
-def train_model(model, dataloaders, optimizer, scheduler, num_epochs=25):
+def train_model(model, dataloaders, optimizer, scheduler, num_epochs, writer):
     since = time.time()
 
     # Create a temporary directory to save training checkpoints
@@ -316,12 +337,23 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs=25):
                 recall = TP/(TP+FN)
                 F1 = (2*precision*recall)/(precision+recall)
                 print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f} Precision: {precision:.4f} Recall: {recall:.4f} F1: {F1:.4f} TN: {TN} FP: {FP} FN: {FN} TP: {TP}')
+                # Tensorboard
+                writer.add_scalar(f"loss/{phase}", epoch_loss, epoch)
+                writer.add_scalar(f"accuracy/{phase}", epoch_acc, epoch)
+                writer.add_scalar(f"precision/{phase}", precision, epoch)
+                writer.add_scalar(f"recall/{phase}", recall, epoch)
+                writer.add_scalar(f"f1/{phase}", F1, epoch)
+                writer.add_scalar(f"Confusion_Matrix/TN/{phase}", TN, epoch)
+                writer.add_scalar(f"Confusion_Matrix/FP/{phase}", FP, epoch)
+                writer.add_scalar(f"Confusion_Matrix/FN/{phase}", FN, epoch)
+                writer.add_scalar(f"Confusion_Matrix/TP/{phase}", TP, epoch)
                 
                 if phase == 'val':
                     score, weight = calculate_per_class_lwlrap(y_val, valid_preds)
                     lwlrap = (score * weight).sum()
                     end_epoch = time.time()
                     print(f"val_lwlrap: {lwlrap:.6f} epoch time: {end_epoch-start_epoch:.2f}s")
+                    writer.add_scalar(f"val_lwlrap", lwlrap, epoch)
 
                 # deep copy the model
                 if phase == 'val' and lwlrap > best_lwlrap:
