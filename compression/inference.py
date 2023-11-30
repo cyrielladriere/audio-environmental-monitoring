@@ -1,4 +1,4 @@
-from compression.preprocessing import convert_dataset, load_pkl, save_images, get_labels, convert_labels
+from compression.preprocessing import load_pkl, get_labels, convert_labels
 from torchvision import transforms, datasets
 from compression.main import TrainDataset, calculate_per_class_lwlrap
 from torch.utils.data import DataLoader, Dataset
@@ -62,40 +62,48 @@ def predict(model, dataloader):
     FP = 0 
     FN = 0 
     TP = 0 
-    for i, data in enumerate(dataloader):
-        inputs, labels = data
-        inputs = inputs.to(device) # Shape: [batch_size, channels, height, width]
-        labels = labels.to(device) # Shape: [batch_size, num_classes]
 
-        bcm = BinaryConfusionMatrix(threshold=threshold).to(device)
+    avg_time = 0
+    with torch.no_grad():
+        for i, data in enumerate(dataloader):
+            start_avg = time.time()
+            inputs, labels = data
+            inputs = inputs.to(device) # Shape: [batch_size, channels, height, width]
+            labels = labels.to(device) # Shape: [batch_size, num_classes]
 
-        if MODEL_PANN or QUANTIZATION_PANN:
-            # Outputs: {"clipwise_output": [batch_size, num_classes], "Embedding": }
-            outputs = model(inputs)["clipwise_output"]
-        elif MODEL_AT:
-            outputs = model(inputs)[0]
-        else:
-            outputs = model(inputs)
-        
-        outputs = torch.sigmoid(outputs)
+            bcm = BinaryConfusionMatrix(threshold=threshold).to(device)
+            
+            
+            if MODEL_PANN or QUANTIZATION_PANN:
+                # Outputs: {"clipwise_output": [batch_size, num_classes], "Embedding": }
+                outputs = model(inputs)["clipwise_output"]
+            elif MODEL_AT:
+                outputs = model(inputs)[0]
+            else:
+                outputs = model(inputs)
+            
+            outputs = torch.sigmoid(outputs)
 
-        preds[i * batch_size: (i+1) * batch_size] = outputs.detach().cpu().numpy()
+            preds[i * batch_size: (i+1) * batch_size] = outputs.cpu().numpy()
 
-        confmat = bcm(outputs, labels)
-        TN += confmat[0][0]
-        FP += confmat[0][1]
-        FN += confmat[1][0]
-        TP += confmat[1][1]
+            confmat = bcm(outputs, labels)
+            TN += confmat[0][0]
+            FP += confmat[0][1]
+            FN += confmat[1][0]
+            TP += confmat[1][1]
+            
+            end_avg = time.time()
+            avg_time += end_avg-start_avg
 
-    precision = TP/(TP+FP)
-    recall = TP/(TP+FN)
-    F1 = (2*precision*recall)/(precision+recall)
+        precision = TP/(TP+FP)
+        recall = TP/(TP+FN)
+        F1 = (2*precision*recall)/(precision+recall)
 
-    score, weight = calculate_per_class_lwlrap(labels_global, preds)
-    lwlrap = (score * weight).sum()
-    end = time.time()
-    print(f'lwlrap: {lwlrap:.4f} Precision: {precision:.4f} Recall: {recall:.4f} F1: {F1:.4f} TN: {TN} FP: {FP} FN: {FN} TP: {TP}')
-    print(f"Time: {end-start:.2f}s")
+        score, weight = calculate_per_class_lwlrap(labels_global, preds)
+        lwlrap = (score * weight).sum()
+        end = time.time()
+        print(f'lwlrap: {lwlrap:.4f} Precision: {precision:.4f} Recall: {recall:.4f} F1: {F1:.4f} TN: {TN} FP: {FP} FN: {FN} TP: {TP}')
+        print(f"Total time: {end-start:.2f}s, average inference time for 1batch: {(avg_time/nr_instances)*1000:.4f}ms")
 
 if __name__ == "__main__":
     main()
