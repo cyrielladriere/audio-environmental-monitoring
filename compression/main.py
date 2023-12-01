@@ -28,9 +28,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 TENSORBOARD = True
 PREPROCESSING = False
 BASE_MODEL = False
-MODEL_AT = False
+MODEL_AT = True
 MODEL_PANN = False
-QUANTIZATION_PANN = True
+QUANTIZATION_PANN = False
 PRUNING = False
 # ------------- Variables
 training_audio_data = "data/audio/train_curated"
