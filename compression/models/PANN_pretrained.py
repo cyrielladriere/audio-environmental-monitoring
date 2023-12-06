@@ -92,7 +92,7 @@ class InvertedResidual(nn.Module):
 
 class MobileNetV2(nn.Module):
     def __init__(self, sample_rate, window_size, hop_size, mel_bins, fmin, 
-        fmax, classes_num, quantize=False):
+        fmax, classes_num, quantize=False, post_training=False):
         self.quantize = quantize
         
         super(MobileNetV2, self).__init__()
@@ -121,7 +121,10 @@ class MobileNetV2(nn.Module):
         self.spec_augmenter = SpecAugmentation(time_drop_width=64, time_stripes_num=2, 
             freq_drop_width=8, freq_stripes_num=2)
 
-        self.bn0 = nn.BatchNorm2d(64)
+        if not post_training: 
+            self.bn0 = nn.BatchNorm2d(64) 
+        else:
+            self.bn0 = nn.BatchNorm2d(128)
  
         width_mult=1.
         block = InvertedResidual
@@ -179,8 +182,12 @@ class MobileNetV2(nn.Module):
         # make it nn.Sequential
         self.features = nn.Sequential(*self.features)
 
-        self.fc1 = nn.Linear(1280, 1024, bias=True)
-        self.fc_audioset = nn.Linear(1024, classes_num, bias=True)
+        if not post_training:
+            self.fc1 = nn.Linear(1280, 1024, bias=True)
+            self.fc_audioset = nn.Linear(1024, classes_num, bias=True)
+        else:
+            self.fc1 = nn.Linear(in_features=1280, out_features=256, bias=True)    # out_features tested: 1024(pretty bad), 512(ok), 128(okok)
+            self.fc_audioset = nn.Linear(256, classes_num, bias=True)
         
         self.init_weight()
 

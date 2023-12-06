@@ -22,16 +22,17 @@ from compression.models.PANN_pretrained import MobileNetV2, loss_func
 from compression.models.base_model import Conv2dNormActivation, MobileNetV3, _mobilenet_v3_conf
 from compression.models.AT_pretrained import MN, _mn_conf
 from compression.preprocessing import convert_dataset, load_pkl, save_images, get_labels, convert_labels
-from compression.models.quantized_model import QuantizableMobileNetV3
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # ------------- Testing Env
-TENSORBOARD = True
+TENSORBOARD = False
+# ----
 PREPROCESSING = False
-BASE_MODEL = False
-MODEL_AT = True
 MODEL_PANN = False
-QUANTIZATION_PANN = False
+PANN_QAT = False
+PANN_QAT_V2 = False      
+PANN_SQ = True         
 PRUNING = False
+MODEL_AT = False
 # ------------- Variables
 training_audio_data = "data/audio/train_curated"
 val_audio_data = "data/audio/test"
@@ -40,12 +41,13 @@ test_audio_labels = "data/audio/sample_submission.csv"
 training_data = "data/train_curated"
 val_data = "data/test"
 model_pann = "resources/MobileNetV2.pth"
+model_pann_trained = "resources/model_pann.pt"
 model_at = "resources/mn10_as.pt"
 # ------------- Hyperparameters
 image_size = (256, 128)
 threshold = 0.5
 batch_size = 64
-n_epochs = 150
+n_epochs = 10
 n_classes = 80
 classes = {'Bark': 0, 'Motorcycle': 1, 'Writing': 2, 'Female_speech_and_woman_speaking': 3, 'Tap': 4, 'Child_speech_and_kid_speaking': 5, 'Screaming': 6, 'Meow': 7, 'Scissors': 8, 'Fart': 9, 'Car_passing_by': 10, 'Harmonica': 11, 'Sink_(filling_or_washing)': 12, 'Burping_and_eructation': 13, 'Slam': 14, 'Drawer_open_or_close': 15, 'Cricket': 16, 'Hiss': 17, 'Frying_(food)': 18, 'Sneeze': 19, 'Chink_and_clink': 20, 'Fill_(with_liquid)': 21, 'Crowd': 22, 'Marimba_and_xylophone': 23, 'Sigh': 24, 'Accordion': 25, 'Electric_guitar': 26, 'Cupboard_open_or_close': 27, 'Bicycle_bell': 28, 'Waves_and_surf': 29, 'Stream': 30, 'Bus': 31, 'Toilet_flush': 32, 'Trickle_and_dribble': 33, 'Tick-tock': 34, 'Keys_jangling': 35, 'Acoustic_guitar': 36, 'Finger_snapping': 37, 'Cheering': 38, 'Race_car_and_auto_racing': 39, 'Bass_guitar': 40, 'Yell': 41, 'Water_tap_and_faucet': 42, 'Run': 43, 'Traffic_noise_and_roadway_noise': 44, 'Crackle': 45, 'Skateboard': 46, 'Glockenspiel': 47, 'Computer_keyboard': 48, 'Whispering': 49, 'Zipper_(clothing)': 50, 'Microwave_oven': 51, 'Bathtub_(filling_or_washing)': 52, 'Male_speech_and_man_speaking': 53, 'Gong': 54, 'Shatter': 55, 'Strum': 56, 'Bass_drum': 57, 'Dishes_and_pots_and_pans': 58, 'Accelerating_and_revving_and_vroom': 59, 'Male_singing': 60, 'Gurgling': 61, 'Walk_and_footsteps': 62, 'Printer': 63, 'Cutlery_and_silverware': 64, 'Chirp_and_tweet': 65, 'Clapping': 66, 'Hi-hat': 67, 'Raindrop': 68, 'Gasp': 69, 'Buzz': 70, 'Drip': 71, 'Chewing_and_mastication': 72, 'Squeak': 73, 'Female_singing': 74, 'Church_bell': 75, 'Mechanical_fan': 76, 'Purr': 77, 'Applause': 78, 'Knock': 79}
 
@@ -77,68 +79,7 @@ def main():
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size)
     dataloaders = {"train": train_dataloader, "val": val_dataloader}
 
-    if(BASE_MODEL):
-        # Error: in_channels should be 3 and it is 1 (cuz we use grayscale not rgb)
-        model = mobilenet_v3_large(weights=MobileNet_V3_Large_Weights.IMAGENET1K_V2).to(device=device)
-
-        print_model_size(model)
-        # print(model)
-    
-        # Freeze weights
-        for param in model.features.parameters():
-            param.requires_grad = False
-
-        # Initialize layers that are not frozen
-        model.features[0] = Conv2dNormActivation(
-                1,
-                16,
-                kernel_size=3,
-                stride=2,
-                norm_layer=partial(nn.BatchNorm2d, eps=0.001, momentum=0.01),
-                activation_layer=nn.Hardswish,
-            )
-        model.classifier[0] = nn.Linear(in_features=960, out_features=1280, bias=True)   
-        model.classifier[3] = nn.Linear(1280, n_classes, bias=True)
-
-        optimizer = optim.Adam(model.parameters(), lr=0.001)
-        exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
-        model.cuda()
-        model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
-    elif(MODEL_AT):
-        # Tensorboard
-        today = datetime.now()
-        date = today.strftime('%b%d_%y-%H-%M')
-        model_dir = f"compression/runs/AT/{date}"
-        if TENSORBOARD: writer = SummaryWriter(model_dir)
-
-        inverted_residual_setting, last_channel = _mn_conf()
-        model = MN(inverted_residual_setting=inverted_residual_setting, last_channel=last_channel, num_classes=527).to(device)
-        pretrained_weights = torch.load(model_at)
-        model.load_state_dict(pretrained_weights, strict=False)
-
-        print_model_size(model)
-
-        # Freeze weights
-        # for param in model.features.parameters():
-        #     param.requires_grad = False
-
-        # Initialize layers that are not frozen
-        model.classifier[2] = nn.Linear(in_features=960, out_features=512, bias=True)   # out_features: 1280(bad), 512
-        model.classifier[5] = nn.Linear(512, n_classes, bias=True)
-
-        optimizer = optim.Adam(model.parameters(), lr=0.001)
-        exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
-        model.cuda()
-        if TENSORBOARD:
-            model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, writer)
-            writer.flush()
-            writer.close()
-
-            torch.save(model.state_dict(), f"{model_dir}/model_at.pt")
-        else:
-            model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
-
-    elif(MODEL_PANN):
+    if(MODEL_PANN):
         # Tensorboard
         today = datetime.now()
         date = today.strftime('%b%d_%y-%H-%M')
@@ -176,15 +117,14 @@ def main():
         # top1, top5, inference_time = evaluate(model, val_dataloader, classes)
         # print(f"Evaluation accuracy on {len(val_dataset)} images: {top1}, {top5}")
         # print("Average inference time: %.4fs" %(inference_time/len(val_dataset)))
-
-    elif(QUANTIZATION_PANN):
+    elif(PANN_QAT):
         # Tensorboard
         today = datetime.now()
         date = today.strftime('%b%d_%y-%H-%M')
         model_dir = f"compression/runs/PANN_QAT/{date}"
         if TENSORBOARD: writer = SummaryWriter(model_dir)
 
-        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 527, True).to(device)
+        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, True).to(device)
         pretrained_weights = torch.load(model_pann)["model"] # keys: {iteration: , model: }
         model.load_state_dict(pretrained_weights)
 
@@ -215,17 +155,98 @@ def main():
 
             torch.save(model_qat.state_dict(), f"{model_dir}/model_pann_qat.pt")
         else:
-            model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, writer)
+            model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
             model.to("cpu") # Needed for quatization convert
             model_qat = torch.quantization.convert(model.eval(), inplace=False)
                     
         print_model_size(model_qat)
+    elif(PANN_QAT_V2):
+        # Tensorboard
+        today = datetime.now()
+        date = today.strftime('%b%d_%y-%H-%M')
+        model_dir = f"compression/runs/PANN_QAT_v2/{date}"
+        if TENSORBOARD: writer = SummaryWriter(model_dir)
+
+        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
+        pretrained_weights = torch.load(model_pann_trained)
+        model.load_state_dict(pretrained_weights)
+
+        print_model_size(model)
+
+        model.cuda()
+        model.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
+        torch.ao.quantization.prepare_qat(model, inplace=True)
+       
+        optimizer = optim.Adam(model.parameters(), lr=0.001)
+        exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
+        if TENSORBOARD:
+            model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, writer)
+            writer.flush()
+            writer.close()
+
+            model.to("cpu") # Needed for quatization convert
+            model_qat = torch.quantization.convert(model.eval(), inplace=False)
+
+            torch.save(model_qat.state_dict(), f"{model_dir}/model_pann_qat.pt")
+        else:
+            model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
+            model.to("cpu") # Needed for quatization convert
+            model_qat = torch.quantization.convert(model.eval(), inplace=False)
+                    
+        print_model_size(model_qat)
+    elif(PANN_SQ):
+        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True)
+        pretrained_weights = torch.load(model_pann_trained)
+        model.load_state_dict(pretrained_weights)
+
+        print_model_size(model) 
+
+        model.qconfig = torch.ao.quantization.get_default_qconfig('x86')
+        torch.backends.quantized.engine = 'x86'
+        model_static_quantized = torch.quantization.prepare(model, inplace=False)
+        model_static_quantized = torch.quantization.convert(model_static_quantized, inplace=False)
+                    
+        print_model_size(model_static_quantized)
+        torch.save(model_static_quantized.state_dict(), f"resources/model_pann_sq.pt")
     elif(PRUNING):
         pass
         # https://pytorch.org/tutorials/intermediate/pruning_tutorial.html
         # https://olegpolivin.medium.com/experiments-in-neural-network-pruning-in-pytorch-c18d5b771d6d
         # https://towardsdatascience.com/how-to-prune-neural-networks-with-pytorch-ebef60316b91
         # https://github.com/pytorch/tutorials/pull/605#issuecomment-585994076
+    elif(MODEL_AT):
+        # Tensorboard
+        today = datetime.now()
+        date = today.strftime('%b%d_%y-%H-%M')
+        model_dir = f"compression/runs/AT/{date}"
+        if TENSORBOARD: writer = SummaryWriter(model_dir)
+
+        inverted_residual_setting, last_channel = _mn_conf()
+        model = MN(inverted_residual_setting=inverted_residual_setting, last_channel=last_channel, num_classes=527).to(device)
+        pretrained_weights = torch.load(model_at)
+        model.load_state_dict(pretrained_weights, strict=False)
+
+        print_model_size(model)
+
+        # Freeze weights
+        # for param in model.features.parameters():
+        #     param.requires_grad = False
+
+        # Initialize layers that are not frozen
+        model.classifier[2] = nn.Linear(in_features=960, out_features=512, bias=True)   # out_features: 1280(bad), 512
+        model.classifier[5] = nn.Linear(512, n_classes, bias=True)
+
+        optimizer = optim.Adam(model.parameters(), lr=0.001)
+        exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
+        model.cuda()
+        if TENSORBOARD:
+            model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, writer)
+            writer.flush()
+            writer.close()
+
+            torch.save(model.state_dict(), f"{model_dir}/model_at.pt")
+        else:
+            model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
     return
 
 class TrainDataset(Dataset):
@@ -302,7 +323,7 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs, writer=Non
                     # forward
                     # track history if only in train
                     with torch.set_grad_enabled(phase == 'train'):
-                        if MODEL_PANN or QUANTIZATION_PANN:
+                        if MODEL_PANN or PANN_QAT or PANN_QAT_V2:
                             # Outputs: {"clipwise_output": [batch_size, num_classes], "Embedding": }
                             outputs = model(inputs)["clipwise_output"]
                         elif MODEL_AT:
