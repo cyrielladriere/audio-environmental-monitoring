@@ -41,12 +41,9 @@ def main():
     global nr_instances
     nr_instances = len(list(data.values()))
 
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=batch_size)
     if(MODEL_PANN):
-        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80).to(device)
-        model.bn0 = nn.BatchNorm2d(128)
-        model.fc1 = nn.Linear(in_features=1280, out_features=256, bias=True)    # out_features tested: 1024(pretty bad), 512(ok), 128(okok)
-        model.fc_audioset = nn.Linear(256, 80, bias=True)
+        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
         pretrained_weights = torch.load(model_pann)
         model.load_state_dict(pretrained_weights)
         model.cuda()
