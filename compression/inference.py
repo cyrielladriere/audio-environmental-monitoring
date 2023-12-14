@@ -11,16 +11,18 @@ from torchmetrics.classification import BinaryAccuracy, BinaryConfusionMatrix
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ------------- Testing Env
-TENSORBOARD = False
-PREPROCESSING = False
-BASE_MODEL = False
-MODEL_AT = False
-MODEL_PANN = True
-QUANTIZATION_PANN = False
+MODEL_PANN = False
+PANN_QAT = True
+PANN_QAT_V2 = False      
+PANN_SQ = False         
 PRUNING = False
+MODEL_AT = False
 # ------------- Variables
 audio_data = "data/train_curated"
 model_pann = "resources/model_pann.pt"
+model_pann_qat = "resources/model_pann_qat.pt"
+model_pann_qat_v2 = "resources/model_pann_qat_v2.pt"
+model_pann_sq = "resources/model_pann_sq.pt"
 # ------------- Hyperparameters
 image_size = (256, 128)
 batch_size = 64
@@ -42,6 +44,7 @@ def main():
     nr_instances = len(list(data.values()))
 
     dataloader = DataLoader(dataset, batch_size=batch_size)
+
     if(MODEL_PANN):
         model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
         pretrained_weights = torch.load(model_pann)
@@ -49,6 +52,30 @@ def main():
         model.cuda()
         model.eval()
         predict(model, dataloader)
+    elif(PANN_QAT):
+        model = torch.jit.load('model_scripted.pt')
+        model.eval()
+        predict(model, dataloader)
+        # model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True, quantize=True)
+        # model.to("cpu")
+        # model.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
+        # torch.ao.quantization.prepare_qat(model, inplace=True)
+        # pretrained_weights = torch.load("model_pann_qat_test.pt")
+        # model.load_state_dict(pretrained_weights)
+        # # model = torch.quantization.convert(model.eval(), inplace=False)
+        # model.cuda()
+        # model.eval()
+        # predict(model, dataloader)
+        # # model_fp32.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
+        # # torch.ao.quantization.prepare_qat(model_fp32, inplace=True)
+        # # model_fp32.to("cpu") # Needed for quatization convert
+        # # model = torch.quantization.convert(model_fp32.eval(), inplace=False)
+        # # pretrained_weights = torch.load(model_pann_qat)
+    elif(PANN_QAT_V2):
+        pretrained_weights = torch.load(model_pann_qat_v2)
+    elif(PANN_SQ):
+        pretrained_weights = torch.load(model_pann_sq)
+    
 
         
 def predict(model, dataloader):
@@ -71,7 +98,7 @@ def predict(model, dataloader):
             bcm = BinaryConfusionMatrix(threshold=threshold).to(device)
             
             
-            if MODEL_PANN or QUANTIZATION_PANN:
+            if MODEL_PANN or PANN_QAT or PANN_QAT_V2:
                 # Outputs: {"clipwise_output": [batch_size, num_classes], "Embedding": }
                 outputs = model(inputs)["clipwise_output"]
             elif MODEL_AT:

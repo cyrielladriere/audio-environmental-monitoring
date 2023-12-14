@@ -11,15 +11,12 @@ import time
 from torchmetrics.classification import BinaryAccuracy, BinaryConfusionMatrix
 from torch import nn, optim
 import os
-import random
 from PIL import Image
 from tempfile import TemporaryDirectory
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms, datasets
-from torchvision.models import MobileNet_V3_Large_Weights, mobilenet_v3_large
 from compression.evaluation import print_model_size, evaluate
 from compression.models.PANN_pretrained import MobileNetV2, loss_func
-from compression.models.base_model import Conv2dNormActivation, MobileNetV3, _mobilenet_v3_conf
 from compression.models.AT_pretrained import MN, _mn_conf
 from compression.preprocessing import convert_dataset, load_pkl, save_images, get_labels, convert_labels
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -29,8 +26,8 @@ TENSORBOARD = False
 PREPROCESSING = False
 MODEL_PANN = False
 PANN_QAT = False
-PANN_QAT_V2 = False      
-PANN_SQ = True         
+PANN_QAT_V2 = True      
+PANN_SQ = False         
 PRUNING = False
 MODEL_AT = False
 # ------------- Variables
@@ -47,7 +44,7 @@ model_at = "resources/mn10_as.pt"
 image_size = (256, 128)
 threshold = 0.5
 batch_size = 64
-n_epochs = 10
+n_epochs = 5
 n_classes = 80
 classes = {'Bark': 0, 'Motorcycle': 1, 'Writing': 2, 'Female_speech_and_woman_speaking': 3, 'Tap': 4, 'Child_speech_and_kid_speaking': 5, 'Screaming': 6, 'Meow': 7, 'Scissors': 8, 'Fart': 9, 'Car_passing_by': 10, 'Harmonica': 11, 'Sink_(filling_or_washing)': 12, 'Burping_and_eructation': 13, 'Slam': 14, 'Drawer_open_or_close': 15, 'Cricket': 16, 'Hiss': 17, 'Frying_(food)': 18, 'Sneeze': 19, 'Chink_and_clink': 20, 'Fill_(with_liquid)': 21, 'Crowd': 22, 'Marimba_and_xylophone': 23, 'Sigh': 24, 'Accordion': 25, 'Electric_guitar': 26, 'Cupboard_open_or_close': 27, 'Bicycle_bell': 28, 'Waves_and_surf': 29, 'Stream': 30, 'Bus': 31, 'Toilet_flush': 32, 'Trickle_and_dribble': 33, 'Tick-tock': 34, 'Keys_jangling': 35, 'Acoustic_guitar': 36, 'Finger_snapping': 37, 'Cheering': 38, 'Race_car_and_auto_racing': 39, 'Bass_guitar': 40, 'Yell': 41, 'Water_tap_and_faucet': 42, 'Run': 43, 'Traffic_noise_and_roadway_noise': 44, 'Crackle': 45, 'Skateboard': 46, 'Glockenspiel': 47, 'Computer_keyboard': 48, 'Whispering': 49, 'Zipper_(clothing)': 50, 'Microwave_oven': 51, 'Bathtub_(filling_or_washing)': 52, 'Male_speech_and_man_speaking': 53, 'Gong': 54, 'Shatter': 55, 'Strum': 56, 'Bass_drum': 57, 'Dishes_and_pots_and_pans': 58, 'Accelerating_and_revving_and_vroom': 59, 'Male_singing': 60, 'Gurgling': 61, 'Walk_and_footsteps': 62, 'Printer': 63, 'Cutlery_and_silverware': 64, 'Chirp_and_tweet': 65, 'Clapping': 66, 'Hi-hat': 67, 'Raindrop': 68, 'Gasp': 69, 'Buzz': 70, 'Drip': 71, 'Chewing_and_mastication': 72, 'Squeak': 73, 'Female_singing': 74, 'Church_bell': 75, 'Mechanical_fan': 76, 'Purr': 77, 'Applause': 78, 'Knock': 79}
 
@@ -124,7 +121,7 @@ def main():
         model_dir = f"compression/runs/PANN_QAT/{date}"
         if TENSORBOARD: writer = SummaryWriter(model_dir)
 
-        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, True).to(device)
+        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 527, True).to(device)
         pretrained_weights = torch.load(model_pann)["model"] # keys: {iteration: , model: }
         model.load_state_dict(pretrained_weights)
 
@@ -157,7 +154,10 @@ def main():
         else:
             model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
             model.to("cpu") # Needed for quatization convert
+            # torch.save(model.state_dict(), f"model_pann_qat_test.pt")
             model_qat = torch.quantization.convert(model.eval(), inplace=False)
+            model_scripted = torch.jit.script(model_qat) # Export to TorchScript
+            model_scripted.save('model_scripted.pt') # Save
                     
         print_model_size(model_qat)
     elif(PANN_QAT_V2):
@@ -170,6 +170,9 @@ def main():
         model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
         pretrained_weights = torch.load(model_pann_trained)
         model.load_state_dict(pretrained_weights)
+
+        print(model)
+        return
 
         print_model_size(model)
 
@@ -187,7 +190,7 @@ def main():
             model.to("cpu") # Needed for quatization convert
             model_qat = torch.quantization.convert(model.eval(), inplace=False)
 
-            torch.save(model_qat.state_dict(), f"{model_dir}/model_pann_qat.pt")
+            torch.save(model_qat.state_dict(), f"{model_dir}/model_pann_qat_v2.pt")
         else:
             model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
             model.to("cpu") # Needed for quatization convert

@@ -1,4 +1,5 @@
 import os
+from thop import profile
 import torch
 import time
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -38,6 +39,9 @@ def print_model_size(mdl):
 
     trainable_params = sum(p.numel() for p in mdl.parameters() if p.requires_grad)
     print(f"Number of trainable parameters: {trainable_params}")
+
+    # macs, params = profile(mdl, inputs=(torch.randn(1, 1, 256, 128))) #image size: (256,128)
+    # print(f"MACs(G): {macs}")
 
 def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""

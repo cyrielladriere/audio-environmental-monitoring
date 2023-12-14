@@ -3,7 +3,6 @@
 # https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
 import torch
 from torch import nn
-import torch.optim as optim
 import torch.nn.functional as F
 from torchlibrosa.stft import Spectrogram, LogmelFilterBank
 from torchlibrosa.augmentation import SpecAugmentation
