@@ -4,25 +4,26 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
+from torch.nn.quantized import FloatFunctional
 from torchlibrosa.stft import Spectrogram, LogmelFilterBank
 from torchlibrosa.augmentation import SpecAugmentation
 from torch.ao.quantization import DeQuantStub, QuantStub
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def do_mixup(x, mixup_lambda):
-    """Mixup x of even indexes (0, 2, 4, ...) with x of odd indexes 
-    (1, 3, 5, ...).
+# def do_mixup(x, mixup_lambda):
+#     """Mixup x of even indexes (0, 2, 4, ...) with x of odd indexes 
+#     (1, 3, 5, ...).
 
-    Args:
-      x: (batch_size * 2, ...)
-      mixup_lambda: (batch_size * 2,)
+#     Args:
+#       x: (batch_size * 2, ...)
+#       mixup_lambda: (batch_size * 2,)
 
-    Returns:
-      out: (batch_size, ...)
-    """
-    out = (x[0 :: 2].transpose(0, -1) * mixup_lambda[0 :: 2] + \
-        x[1 :: 2].transpose(0, -1) * mixup_lambda[1 :: 2]).transpose(0, -1)
-    return out
+#     Returns:
+#       out: (batch_size, ...)
+#     """
+#     out = (x[0 :: 2].transpose(0, -1) * mixup_lambda[0 :: 2] + \
+#         x[1 :: 2].transpose(0, -1) * mixup_lambda[1 :: 2]).transpose(0, -1)
+#     return out
 
 def init_layer(layer):
     """Initialize a Linear or Convolutional layer. """
@@ -39,10 +40,14 @@ def init_bn(bn):
     bn.weight.data.fill_(1.)
 
 class InvertedResidual(nn.Module):
-    def __init__(self, inp, oup, stride, expand_ratio):
+    def __init__(self, inp, oup, stride, expand_ratio, quantize=False):
         super(InvertedResidual, self).__init__()
         self.stride = stride
         assert stride in [1, 2]
+
+        self.quantize=quantize
+        if(self.quantize):
+            self.ff = FloatFunctional()
 
         hidden_dim = round(inp * expand_ratio)
         self.use_res_connect = self.stride == 1 and inp == oup
@@ -85,7 +90,10 @@ class InvertedResidual(nn.Module):
 
     def forward(self, x):
         if self.use_res_connect:
-            return x + self.conv(x)
+            if self.quantize:
+                return self.ff.add(x, self.conv(x))
+            else:
+                return x + self.conv(x)
         else:
             return self.conv(x)
 
@@ -98,7 +106,9 @@ class MobileNetV2(nn.Module):
         if quantize:
             self.quant = QuantStub()
             self.dequant = DeQuantStub()
+            self.ff = FloatFunctional() #https://discuss.pytorch.org/t/runtimeerror-could-not-run-aten-add-tensor-with-arguments-from-the-quantizedcpu-backend/110039
 
+        self.post_training = post_training
         window = 'hann'
         center = True
         pad_mode = 'reflect'
@@ -172,9 +182,9 @@ class MobileNetV2(nn.Module):
             output_channel = int(c * width_mult)
             for i in range(n):
                 if i == 0:
-                    self.features.append(block(input_channel, output_channel, s, expand_ratio=t))
+                    self.features.append(block(input_channel, output_channel, s, expand_ratio=t, quantize=self.quantize))
                 else:
-                    self.features.append(block(input_channel, output_channel, 1, expand_ratio=t))
+                    self.features.append(block(input_channel, output_channel, 1, expand_ratio=t, quantize=self.quantize))
                 input_channel = output_channel
         # building last several layers
         self.features.append(conv_1x1_bn(input_channel, self.last_channel))
@@ -212,9 +222,9 @@ class MobileNetV2(nn.Module):
         if self.training:
             x = self.spec_augmenter(x)
 
-        # Mixup on spectrogram
-        if self.training and mixup_lambda is not None:
-            x = do_mixup(x, mixup_lambda)
+        # # Mixup on spectrogram
+        # if self.training and mixup_lambda is not None:
+        #     x = do_mixup(x, mixup_lambda)
         
         x = self.features(x)
         
@@ -222,7 +232,10 @@ class MobileNetV2(nn.Module):
         
         (x1, _) = torch.max(x, dim=2)
         x2 = torch.mean(x, dim=2)
-        x = x1 + x2
+        if self.quantize:
+            x = self.ff.add(x1, x2)
+        else:
+            x = x1 + x2
         # x = F.dropout(x, p=0.5, training=self.training)
         x = F.relu_(self.fc1(x))
         embedding = F.dropout(x, p=0.5, training=self.training)

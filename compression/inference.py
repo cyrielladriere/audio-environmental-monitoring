@@ -8,7 +8,7 @@ import numpy as np
 import time
 from compression.models.PANN_pretrained import MobileNetV2
 from torchmetrics.classification import BinaryAccuracy, BinaryConfusionMatrix
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = "cpu"
 
 # ------------- Testing Env
 MODEL_PANN = False
@@ -53,19 +53,19 @@ def main():
         model.eval()
         predict(model, dataloader)
     elif(PANN_QAT):
-        model = torch.jit.load('model_scripted.pt')
-        model.eval()
-        predict(model, dataloader)
-        # model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True, quantize=True)
-        # model.to("cpu")
-        # model.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
-        # torch.ao.quantization.prepare_qat(model, inplace=True)
-        # pretrained_weights = torch.load("model_pann_qat_test.pt")
-        # model.load_state_dict(pretrained_weights)
-        # # model = torch.quantization.convert(model.eval(), inplace=False)
-        # model.cuda()
+        # model = torch.jit.load('model_scripted.pt')
         # model.eval()
         # predict(model, dataloader)
+        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True, quantize=True)
+        model.to("cpu")
+        pretrained_weights = torch.load("model_pann_qat_test.pt")
+        model.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
+        torch.ao.quantization.prepare_qat(model, inplace=True)
+        model = torch.quantization.convert(model.eval(), inplace=True)
+        # https://discuss.pytorch.org/t/error-in-running-quantised-model-runtimeerror-could-not-run-quantized-conv2d-new-with-arguments-from-the-cpu-backend/151718/3
+        model.load_state_dict(pretrained_weights)
+        model.eval()
+        predict(model, dataloader)
         # # model_fp32.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
         # # torch.ao.quantization.prepare_qat(model_fp32, inplace=True)
         # # model_fp32.to("cpu") # Needed for quatization convert
@@ -75,8 +75,6 @@ def main():
         pretrained_weights = torch.load(model_pann_qat_v2)
     elif(PANN_SQ):
         pretrained_weights = torch.load(model_pann_sq)
-    
-
         
 def predict(model, dataloader):
     start = time.time()
