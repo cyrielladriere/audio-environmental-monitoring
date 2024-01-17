@@ -18,6 +18,7 @@ from torchvision import transforms, datasets
 from compression.evaluation import print_model_size, evaluate
 from compression.models.PANN_pretrained import MobileNetV2, loss_func
 from compression.models.AT_pretrained import MN, _mn_conf
+from compression.models.PANN_pruned import MobileNetV2_pruned
 from compression.preprocessing import convert_dataset, load_pkl, save_images, get_labels, convert_labels
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # ------------- Testing Env
@@ -25,10 +26,10 @@ TENSORBOARD = False
 # ----
 PREPROCESSING = False
 MODEL_PANN = False
-PANN_QAT = True
+PANN_QAT = False
 PANN_QAT_V2 = False      
 PANN_SQ = False         
-PRUNING = False
+PRUNING = True; P=0.5
 MODEL_AT = False
 # ------------- Variables
 training_audio_data = "data/audio/train_curated"
@@ -210,11 +211,9 @@ def main():
         print_model_size(model_static_quantized)
         torch.save(model_static_quantized.state_dict(), f"resources/model_pann_sq.pt")
     elif(PRUNING):
-        pass
-        # https://pytorch.org/tutorials/intermediate/pruning_tutorial.html
-        # https://olegpolivin.medium.com/experiments-in-neural-network-pruning-in-pytorch-c18d5b771d6d
-        # https://towardsdatascience.com/how-to-prune-neural-networks-with-pytorch-ebef60316b91
-        # https://github.com/pytorch/tutorials/pull/605#issuecomment-585994076
+        model = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
+        print(model)
+
     elif(MODEL_AT):
         # Tensorboard
         today = datetime.now()

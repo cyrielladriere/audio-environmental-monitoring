@@ -63,16 +63,16 @@ indexes = [8, 14, 20, 26, 32, 38, 44, 50, 56, 62, 68, 74, 80, 86, 92, 98, 104, 1
 
 
 for i, j in enumerate(indexes):
-	print(i)
+	# print(i)
 	W_2D=W_init[j]
-	print(W_2D.shape)
+	# print(W_2D.shape)
 	W=np.reshape(W_2D,(np.shape(W_2D)[2]*np.shape(W_2D)[3],np.shape(W_2D)[1],np.shape(W_2D)[0]))  # (kernel_size x kernel_size, channels_in_filter, amount_of_filters) different arrangement from paper
-	print(np.shape(W),'layer  :','  ', j)
-	print(np.shape(W),'shape of weights')
+	# print(np.shape(W),'layer  :','  ', j)
+	# print(np.shape(W),'shape of weights')
 	score_norm_m1 = operator_norm_pruning(W)
-	print(np.argsort(score_norm_m1))
+	# print(np.argsort(score_norm_m1))
 	# Score_L1=CVPR_L1_Imp_index(W)  #l_1 entry wise norm based important scores
 	# Score_GM=CVPR_GM_Imp_index(W)  #Geomettric median based important scores
-	# file_name='sim_index'+str(j)+'.npy'
-	# np.save(file_name,np.argsort(score_norm_m1)) # save sorted arguments from low to high importance.
+	file_name='opnorm_pruning_layer_'+str(i)+'.npy'
+	np.save(f"compression/pruning_scores/{file_name}",np.argsort(score_norm_m1)) # save sorted arguments from low to high importance.
 	
