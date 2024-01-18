@@ -211,8 +211,54 @@ def main():
         print_model_size(model_static_quantized)
         torch.save(model_static_quantized.state_dict(), f"resources/model_pann_sq.pt")
     elif(PRUNING):
-        model = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
-        print(model)
+        # Pruned Model
+        indexes = [8, 14, 20, 26, 32, 38, 44, 50, 56, 62, 68, 74, 80, 86, 92, 98, 104, 110, 116, 122, 128, 134, 140, 146, 152, 158, 164, 170, 176, 182, 188, 194, 200, 206, 212, 218, 224, 230, 236, 242, 248, 254, 260, 266, 272, 278, 284, 290, 296, 302, 308, 314]
+        model_pruned = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
+
+        # Original Model
+        # model_original = torch.load(model_pann_trained)
+        # model_original_subscr = list(model_original.values())
+        model_original = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
+        pretrained_weights = torch.load(model_pann_trained)
+        model_original.load_state_dict(pretrained_weights)
+
+        # layers = len(indexes)
+        # w = []
+        # for i in range(layers):
+        #     w.append(sorted(np.load(f"compression/pruning_scores/opnorm_pruning_layer_{i}.npy")))
+        
+        # with torch.no_grad():
+        #     for name, param in model_original.named_parameters():
+        #         print(name, param.size())
+        # print(len(model_original.named_parameters()))
+        with torch.no_grad():
+            k = 0
+            for i, layer in enumerate(model_original.named_parameters()): 
+                layer = layer[0]
+                layer_name = layer.split(".")
+
+                model_copy_pruned = model_pruned
+                model_copy_original = model_original
+                current_layer_pruned = None
+                current_layer_original = None
+
+                for j in range(len(layer_name)-1):
+                    current_layer_pruned = getattr(model_copy_pruned, layer_name[j])
+                    current_layer_original = getattr(model_copy_original, layer_name[j])
+                    model_copy_pruned = current_layer_pruned
+                    model_copy_original = current_layer_original
+                
+                # In case layer needs to get pruned
+                if i == indexes[k]: #does not work, each subsequent batchnorm and stuff depends on this so cant just change conv layers
+                    print(f"{layer} -----------------------------")
+                    current_layer_pruned.load_state_dict(current_layer_original.state_dict())
+                    k += 1
+                else:
+                    print(layer)
+                    current_layer_pruned.load_state_dict(current_layer_original.state_dict())
+                
+
+
 
     elif(MODEL_AT):
         # Tensorboard

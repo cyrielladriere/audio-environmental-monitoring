@@ -101,7 +101,7 @@ class MobileNetV2_pruned(nn.Module):
             freq_drop_width=8, freq_stripes_num=2)
 
  
-        self.bn0 = nn.BatchNorm2d(64) 
+        self.bn0 = nn.BatchNorm2d(128) 
  
         width_mult=1.
         block = InvertedResidual
