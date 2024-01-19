@@ -58,7 +58,7 @@ def main():
         # predict(model, dataloader)
         model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True, quantize=True)
         model.to("cpu")
-        pretrained_weights = torch.load("model_pann_qat_test.pt")
+        pretrained_weights = torch.load(model_pann_qat)
         model.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
         torch.ao.quantization.prepare_qat(model, inplace=True)
         model = torch.quantization.convert(model.eval(), inplace=True)

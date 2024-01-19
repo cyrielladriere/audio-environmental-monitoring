@@ -45,7 +45,7 @@ model_at = "resources/mn10_as.pt"
 image_size = (256, 128)
 threshold = 0.5
 batch_size = 64
-n_epochs = 1
+n_epochs = 150
 n_classes = 80
 classes = {'Bark': 0, 'Motorcycle': 1, 'Writing': 2, 'Female_speech_and_woman_speaking': 3, 'Tap': 4, 'Child_speech_and_kid_speaking': 5, 'Screaming': 6, 'Meow': 7, 'Scissors': 8, 'Fart': 9, 'Car_passing_by': 10, 'Harmonica': 11, 'Sink_(filling_or_washing)': 12, 'Burping_and_eructation': 13, 'Slam': 14, 'Drawer_open_or_close': 15, 'Cricket': 16, 'Hiss': 17, 'Frying_(food)': 18, 'Sneeze': 19, 'Chink_and_clink': 20, 'Fill_(with_liquid)': 21, 'Crowd': 22, 'Marimba_and_xylophone': 23, 'Sigh': 24, 'Accordion': 25, 'Electric_guitar': 26, 'Cupboard_open_or_close': 27, 'Bicycle_bell': 28, 'Waves_and_surf': 29, 'Stream': 30, 'Bus': 31, 'Toilet_flush': 32, 'Trickle_and_dribble': 33, 'Tick-tock': 34, 'Keys_jangling': 35, 'Acoustic_guitar': 36, 'Finger_snapping': 37, 'Cheering': 38, 'Race_car_and_auto_racing': 39, 'Bass_guitar': 40, 'Yell': 41, 'Water_tap_and_faucet': 42, 'Run': 43, 'Traffic_noise_and_roadway_noise': 44, 'Crackle': 45, 'Skateboard': 46, 'Glockenspiel': 47, 'Computer_keyboard': 48, 'Whispering': 49, 'Zipper_(clothing)': 50, 'Microwave_oven': 51, 'Bathtub_(filling_or_washing)': 52, 'Male_speech_and_man_speaking': 53, 'Gong': 54, 'Shatter': 55, 'Strum': 56, 'Bass_drum': 57, 'Dishes_and_pots_and_pans': 58, 'Accelerating_and_revving_and_vroom': 59, 'Male_singing': 60, 'Gurgling': 61, 'Walk_and_footsteps': 62, 'Printer': 63, 'Cutlery_and_silverware': 64, 'Chirp_and_tweet': 65, 'Clapping': 66, 'Hi-hat': 67, 'Raindrop': 68, 'Gasp': 69, 'Buzz': 70, 'Drip': 71, 'Chewing_and_mastication': 72, 'Squeak': 73, 'Female_singing': 74, 'Church_bell': 75, 'Mechanical_fan': 76, 'Purr': 77, 'Applause': 78, 'Knock': 79}
 
@@ -158,7 +158,6 @@ def main():
             # model_scripted = torch.jit.script(model) # Export to TorchScript
             # model_scripted.save('model_scripted.pt') # Save
             model_qat = torch.quantization.convert(model.eval(), inplace=False)
-            torch.save(model_qat.state_dict(), "model_pann_qat_test.pt")
             
                     
         print_model_size(model_qat)
@@ -214,7 +213,8 @@ def main():
         # Pruned Model
         indexes = [8, 14, 20, 26, 32, 38, 44, 50, 56, 62, 68, 74, 80, 86, 92, 98, 104, 110, 116, 122, 128, 134, 140, 146, 152, 158, 164, 170, 176, 182, 188, 194, 200, 206, 212, 218, 224, 230, 236, 242, 248, 254, 260, 266, 272, 278, 284, 290, 296, 302, 308, 314]
         model_pruned = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
-
+        # print(model_pruned)
+        # return
         # Original Model
         # model_original = torch.load(model_pann_trained)
         # model_original_subscr = list(model_original.values())
@@ -222,17 +222,23 @@ def main():
         pretrained_weights = torch.load(model_pann_trained)
         model_original.load_state_dict(pretrained_weights)
 
+        print_model_size(model_original)
+
         # layers = len(indexes)
         # w = []
         # for i in range(layers):
         #     w.append(sorted(np.load(f"compression/pruning_scores/opnorm_pruning_layer_{i}.npy")))
         
         # with torch.no_grad():
-        #     for name, param in model_original.named_parameters():
-        #         print(name, param.size())
-        # print(len(model_original.named_parameters()))
+        #     i = 0
+        #     for name, param in model_pruned.named_parameters():
+        #         print(name, param.size(), i)
+        #         i += 1
+        #     print(i)
+        # return
         with torch.no_grad():
             k = 0
+            prev_pruned_weights = None  # in_channel
             for i, layer in enumerate(model_original.named_parameters()): 
                 layer = layer[0]
                 layer_name = layer.split(".")
@@ -248,14 +254,33 @@ def main():
                     model_copy_pruned = current_layer_pruned
                     model_copy_original = current_layer_original
                 
-                # In case layer needs to get pruned
-                if i == indexes[k]: #does not work, each subsequent batchnorm and stuff depends on this so cant just change conv layers
-                    print(f"{layer} -----------------------------")
-                    current_layer_pruned.load_state_dict(current_layer_original.state_dict())
-                    k += 1
-                else:
-                    print(layer)
-                    current_layer_pruned.load_state_dict(current_layer_original.state_dict())
+                if k <= 51: # just for the last batchnorm/activation layer so we dont get file doesnt exist error (todo better fix)
+                    pruned_weights = np.load(f"compression/pruning_scores/opnorm_pruning_layer_{k}.npy")
+                    pruned_weights = sorted(pruned_weights[int(np.ceil(len(pruned_weights)*P)):])   # out_channel
+
+                if i >= 5 and i < 161: # until last non-fully connected node
+                    # print(f"{layer}, {i} -----------------------------")
+                    W = current_layer_original.state_dict()
+                    for key in W.keys():
+                        if key == 'num_batches_tracked':
+                            continue
+                        if len(W[key].shape) == 1:   # Batchnorm or activation layer
+                            W[key] = W[key][prev_pruned_weights]
+                        else: # Convulutional layer
+                            if(current_layer_original.state_dict()[key].shape[1] == 1): # Conv layer with groups element
+                                W[key] = W[key][pruned_weights,:,:,:]
+                            else:
+                                W[key] = W[key][pruned_weights,:,:,:]
+                                W[key] = W[key][:,prev_pruned_weights,:,:]
+                            k += 1
+                            prev_pruned_weights = pruned_weights
+                        # print(W[key].shape, current_layer_original.state_dict()[key].shape)
+                    current_layer_pruned.load_state_dict(W)
+                # Randomly initialize fully connected layers
+        
+        print_model_size(model_pruned)
+        torch.save(model_pruned.state_dict(), f"resources/model_pann_pruned_{P}.pt")
+
                 
 
 
