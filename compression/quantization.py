@@ -1,5 +1,5 @@
 from torch.utils.tensorboard import SummaryWriter
-import datetime
+from datetime import datetime
 from compression.training import train_model
 from compression.models.PANN_pretrained import MobileNetV2
 import torch

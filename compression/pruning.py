@@ -8,47 +8,47 @@ from scipy.spatial import distance
 
 def import_pruned_weights(model_original, model_pruned, P):
 	with torch.no_grad():
-            k = 0
-            prev_pruned_weights = None  # in_channel
-            for i, layer in enumerate(model_original.named_parameters()): 
-                layer = layer[0]
-                layer_name = layer.split(".")
+		k = 0
+		prev_pruned_weights = None  # in_channel
+		for i, layer in enumerate(model_original.named_parameters()): 
+			layer = layer[0]
+			layer_name = layer.split(".")
 
-                model_copy_pruned = model_pruned
-                model_copy_original = model_original
-                current_layer_pruned = None
-                current_layer_original = None
+			model_copy_pruned = model_pruned
+			model_copy_original = model_original
+			current_layer_pruned = None
+			current_layer_original = None
 
-                for j in range(len(layer_name)-1):
-                    current_layer_pruned = getattr(model_copy_pruned, layer_name[j])
-                    current_layer_original = getattr(model_copy_original, layer_name[j])
-                    model_copy_pruned = current_layer_pruned
-                    model_copy_original = current_layer_original
-                
-                if k <= 51: # just for the last batchnorm/activation layer so we dont get file doesnt exist error (todo better fix)
-                    pruned_weights = np.load(f"compression/pruning_scores/opnorm_pruning_layer_{k}.npy")
-                    pruned_weights = sorted(pruned_weights[int(np.ceil(len(pruned_weights)*P)):])   # out_channel
+			for j in range(len(layer_name)-1):
+				current_layer_pruned = getattr(model_copy_pruned, layer_name[j])
+				current_layer_original = getattr(model_copy_original, layer_name[j])
+				model_copy_pruned = current_layer_pruned
+				model_copy_original = current_layer_original
+			
+			if k <= 51: # just for the last batchnorm/activation layer so we dont get file doesnt exist error (todo better fix)
+				pruned_weights = np.load(f"compression/pruning_scores/opnorm_pruning_layer_{k}.npy")
+				pruned_weights = sorted(pruned_weights[int(np.ceil(len(pruned_weights)*P)):])   # out_channel
 
-                if i >= 5 and i < 161: # until last non-fully connected node
-                    # print(f"{layer}, {i} -----------------------------")
-                    W = current_layer_original.state_dict()
-                    for key in W.keys():
-                        if key == 'num_batches_tracked':
-                            continue
-                        if len(W[key].shape) == 1:   # Batchnorm or activation layer
-                            W[key] = W[key][prev_pruned_weights]
-                        else: # Convulutional layer
-                            if(current_layer_original.state_dict()[key].shape[1] == 1): # Conv layer with groups element
-                                W[key] = W[key][pruned_weights,:,:,:]
-                            else:
-                                W[key] = W[key][pruned_weights,:,:,:]
-                                W[key] = W[key][:,prev_pruned_weights,:,:]
-                            k += 1
-                            prev_pruned_weights = pruned_weights
-                        # print(W[key].shape, current_layer_original.state_dict()[key].shape)
-                    current_layer_pruned.load_state_dict(W)
-                	# Randomly initialize fully connected layers
-        return model_pruned
+			if i >= 5 and i < 161: # until last non-fully connected node
+				# print(f"{layer}, {i} -----------------------------")
+				W = current_layer_original.state_dict()
+				for key in W.keys():
+					if key == 'num_batches_tracked':
+						continue
+					if len(W[key].shape) == 1:   # Batchnorm or activation layer
+						W[key] = W[key][prev_pruned_weights]
+					else: # Convulutional layer
+						if(current_layer_original.state_dict()[key].shape[1] == 1): # Conv layer with groups element
+							W[key] = W[key][pruned_weights,:,:,:]
+						else:
+							W[key] = W[key][pruned_weights,:,:,:]
+							W[key] = W[key][:,prev_pruned_weights,:,:]
+						k += 1
+						prev_pruned_weights = pruned_weights
+					# print(W[key].shape, current_layer_original.state_dict()[key].shape)
+				current_layer_pruned.load_state_dict(W)
+				# Randomly initialize fully connected layers
+		return model_pruned
 
 def get_pruned_layers():
 	model_pann_trained = "resources/model_pann.pt"
