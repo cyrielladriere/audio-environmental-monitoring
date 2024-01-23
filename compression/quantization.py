@@ -1,13 +1,13 @@
 from torch.utils.tensorboard import SummaryWriter
 import datetime
-from compression.main import train_model
+from compression.training import train_model
 from compression.models.PANN_pretrained import MobileNetV2
 import torch
 from torch import nn, optim
 from compression.evaluation import print_model_size
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def pann_qat_v1(TENSORBOARD, model_pann, n_classes, dataloaders, n_epochs):
+def pann_qat_v1(TENSORBOARD, model_pann, n_classes, dataloaders, n_epochs, data, threshold, batch_size):
     # Tensorboard
     today = datetime.now()
     date = today.strftime('%b%d_%y-%H-%M')
@@ -36,7 +36,7 @@ def pann_qat_v1(TENSORBOARD, model_pann, n_classes, dataloaders, n_epochs):
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
     if TENSORBOARD:
-        model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, writer)
+        model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, data, threshold, batch_size, True, TENSORBOARD, writer)
         writer.flush()
         writer.close()
 
@@ -45,7 +45,7 @@ def pann_qat_v1(TENSORBOARD, model_pann, n_classes, dataloaders, n_epochs):
 
         torch.save(model_qat.state_dict(), f"{model_dir}/model_pann_qat.pt")
     else:
-        model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
+        model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, data, threshold, batch_size, True, TENSORBOARD)
         model.to("cpu") # Needed for quatization convert
         # model_scripted = torch.jit.script(model) # Export to TorchScript
         # model_scripted.save('model_scripted.pt') # Save
@@ -53,7 +53,7 @@ def pann_qat_v1(TENSORBOARD, model_pann, n_classes, dataloaders, n_epochs):
     print_model_size(model_qat)
     return model_qat
 
-def pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs):
+def pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size):
     # Tensorboard
     today = datetime.now()
     date = today.strftime('%b%d_%y-%H-%M')
@@ -73,7 +73,7 @@ def pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs):
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
     if TENSORBOARD:
-        model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, writer)
+        model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, data, threshold, batch_size, True, TENSORBOARD, writer)
         writer.flush()
         writer.close()
 
@@ -82,7 +82,7 @@ def pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs):
 
         torch.save(model_qat.state_dict(), f"{model_dir}/model_pann_qat_v2.pt")
     else:
-        model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
+        model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, data, threshold, batch_size, True, TENSORBOARD)
         model.to("cpu") # Needed for quatization convert
         model_qat = torch.quantization.convert(model.eval(), inplace=False)
     print_model_size(model_qat)
