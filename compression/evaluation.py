@@ -2,7 +2,91 @@ import os
 from thop import profile
 import torch
 import time
+import numpy as np
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+classes = {'Bark': 0, 'Motorcycle': 1, 'Writing': 2, 'Female_speech_and_woman_speaking': 3, 'Tap': 4, 'Child_speech_and_kid_speaking': 5, 'Screaming': 6, 'Meow': 7, 'Scissors': 8, 'Fart': 9, 'Car_passing_by': 10, 'Harmonica': 11, 'Sink_(filling_or_washing)': 12, 'Burping_and_eructation': 13, 'Slam': 14, 'Drawer_open_or_close': 15, 'Cricket': 16, 'Hiss': 17, 'Frying_(food)': 18, 'Sneeze': 19, 'Chink_and_clink': 20, 'Fill_(with_liquid)': 21, 'Crowd': 22, 'Marimba_and_xylophone': 23, 'Sigh': 24, 'Accordion': 25, 'Electric_guitar': 26, 'Cupboard_open_or_close': 27, 'Bicycle_bell': 28, 'Waves_and_surf': 29, 'Stream': 30, 'Bus': 31, 'Toilet_flush': 32, 'Trickle_and_dribble': 33, 'Tick-tock': 34, 'Keys_jangling': 35, 'Acoustic_guitar': 36, 'Finger_snapping': 37, 'Cheering': 38, 'Race_car_and_auto_racing': 39, 'Bass_guitar': 40, 'Yell': 41, 'Water_tap_and_faucet': 42, 'Run': 43, 'Traffic_noise_and_roadway_noise': 44, 'Crackle': 45, 'Skateboard': 46, 'Glockenspiel': 47, 'Computer_keyboard': 48, 'Whispering': 49, 'Zipper_(clothing)': 50, 'Microwave_oven': 51, 'Bathtub_(filling_or_washing)': 52, 'Male_speech_and_man_speaking': 53, 'Gong': 54, 'Shatter': 55, 'Strum': 56, 'Bass_drum': 57, 'Dishes_and_pots_and_pans': 58, 'Accelerating_and_revving_and_vroom': 59, 'Male_singing': 60, 'Gurgling': 61, 'Walk_and_footsteps': 62, 'Printer': 63, 'Cutlery_and_silverware': 64, 'Chirp_and_tweet': 65, 'Clapping': 66, 'Hi-hat': 67, 'Raindrop': 68, 'Gasp': 69, 'Buzz': 70, 'Drip': 71, 'Chewing_and_mastication': 72, 'Squeak': 73, 'Female_singing': 74, 'Church_bell': 75, 'Mechanical_fan': 76, 'Purr': 77, 'Applause': 78, 'Knock': 79}
+
+def _one_sample_positive_class_precisions(scores, truth):
+    """Calculate precisions for each true class for a single sample.
+
+    Args:
+      scores: np.array of (num_classes,) giving the individual classifier scores.
+      truth: np.array of (num_classes,) bools indicating which classes are true.
+
+    Returns:
+      pos_class_indices: np.array of indices of the true classes for this sample.
+      pos_class_precisions: np.array of precisions corresponding to each of those
+        classes.
+    """
+    num_classes = scores.shape[0]
+    pos_class_indices = np.flatnonzero(truth > 0)
+    # Only calculate precisions if there are some true classes.
+    if not len(pos_class_indices):
+        return pos_class_indices, np.zeros(0)
+    # Retrieval list of classes for this sample.
+    retrieved_classes = np.argsort(scores)[::-1]
+    # class_rankings[top_scoring_class_index] == 0 etc.
+    class_rankings = np.zeros(num_classes, dtype=np.int32)
+    class_rankings[retrieved_classes] = range(num_classes)
+    # Which of these is a true label?
+    retrieved_class_true = np.zeros(num_classes, dtype=np.bool_)
+    retrieved_class_true[class_rankings[pos_class_indices]] = True
+    # Num hits for every truncated retrieval list.
+    retrieved_cumulative_hits = np.cumsum(retrieved_class_true)
+    # Precision of retrieval list truncated at each hit, in order of pos_labels.
+    precision_at_hits = (
+            retrieved_cumulative_hits[class_rankings[pos_class_indices]] /
+            (1 + class_rankings[pos_class_indices].astype(np.float64)))
+    return pos_class_indices, precision_at_hits
+
+def calculate_per_class_lwlrap(truth, scores):
+    """Calculate label-weighted label-ranking average precision.
+
+    Arguments:
+      truth: np.array of (num_samples, num_classes) giving boolean ground-truth
+        of presence of that class in that sample.
+      scores: np.array of (num_samples, num_classes) giving the classifier-under-
+        test's real-valued score for each class for each sample.
+
+    Returns:
+      per_class_lwlrap: np.array of (num_classes,) giving the lwlrap for each
+        class.
+      weight_per_class: np.array of (num_classes,) giving the prior of each
+        class within the truth labels.  Then the overall unbalanced lwlrap is
+        simply np.sum(per_class_lwlrap * weight_per_class)
+    """
+    labels = []
+    for label in truth:
+        one_hot_vector = np.zeros(len(classes), dtype=int)
+        one_hot_vector[label] = 1
+        labels.append(one_hot_vector)
+
+    # print(f"labels: {labels[0]}")
+    # print(f"scores: {scores[0]}")
+    truth = np.array(labels)
+    scores = np.array(scores)
+    assert truth.shape == scores.shape
+    num_samples, num_classes = scores.shape
+    # Space to store a distinct precision value for each class on each sample.
+    # Only the classes that are true for each sample will be filled in.
+    precisions_for_samples_by_classes = np.zeros((num_samples, num_classes))
+    for sample_num in range(num_samples):
+        pos_class_indices, precision_at_hits = (
+            _one_sample_positive_class_precisions(scores[sample_num, :],
+                                                  truth[sample_num, :]))
+        precisions_for_samples_by_classes[sample_num, pos_class_indices] = (
+            precision_at_hits)
+    labels_per_class = np.sum(truth > 0, axis=0)
+    weight_per_class = labels_per_class / float(np.sum(labels_per_class))
+    # Form average of each column, i.e. all the precisions assigned to labels in
+    # a particular class.
+    per_class_lwlrap = (np.sum(precisions_for_samples_by_classes, axis=0) /
+                        np.maximum(1, labels_per_class))
+    # overall_lwlrap = simple average of all the actual per-class, per-sample precisions
+    #                = np.sum(precisions_for_samples_by_classes) / np.sum(precisions_for_samples_by_classes > 0)
+    #           also = weighted mean of per-class lwlraps, weighted by class label prior across samples
+    #                = np.sum(per_class_lwlrap * weight_per_class)
+    return per_class_lwlrap, weight_per_class
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""

@@ -6,9 +6,78 @@ import torch
 from scipy.stats.mstats import gmean
 from scipy.spatial import distance
 
-model_pann_trained = "resources/model_pann.pt"
+def import_pruned_weights(model_original, model_pruned, P):
+	with torch.no_grad():
+            k = 0
+            prev_pruned_weights = None  # in_channel
+            for i, layer in enumerate(model_original.named_parameters()): 
+                layer = layer[0]
+                layer_name = layer.split(".")
 
-# os.chdir('~/importance_scores/VGG16_MNIST/')
+                model_copy_pruned = model_pruned
+                model_copy_original = model_original
+                current_layer_pruned = None
+                current_layer_original = None
+
+                for j in range(len(layer_name)-1):
+                    current_layer_pruned = getattr(model_copy_pruned, layer_name[j])
+                    current_layer_original = getattr(model_copy_original, layer_name[j])
+                    model_copy_pruned = current_layer_pruned
+                    model_copy_original = current_layer_original
+                
+                if k <= 51: # just for the last batchnorm/activation layer so we dont get file doesnt exist error (todo better fix)
+                    pruned_weights = np.load(f"compression/pruning_scores/opnorm_pruning_layer_{k}.npy")
+                    pruned_weights = sorted(pruned_weights[int(np.ceil(len(pruned_weights)*P)):])   # out_channel
+
+                if i >= 5 and i < 161: # until last non-fully connected node
+                    # print(f"{layer}, {i} -----------------------------")
+                    W = current_layer_original.state_dict()
+                    for key in W.keys():
+                        if key == 'num_batches_tracked':
+                            continue
+                        if len(W[key].shape) == 1:   # Batchnorm or activation layer
+                            W[key] = W[key][prev_pruned_weights]
+                        else: # Convulutional layer
+                            if(current_layer_original.state_dict()[key].shape[1] == 1): # Conv layer with groups element
+                                W[key] = W[key][pruned_weights,:,:,:]
+                            else:
+                                W[key] = W[key][pruned_weights,:,:,:]
+                                W[key] = W[key][:,prev_pruned_weights,:,:]
+                            k += 1
+                            prev_pruned_weights = pruned_weights
+                        # print(W[key].shape, current_layer_original.state_dict()[key].shape)
+                    current_layer_pruned.load_state_dict(W)
+                	# Randomly initialize fully connected layers
+        return model_pruned
+
+def get_pruned_layers():
+	model_pann_trained = "resources/model_pann.pt"
+
+	# load weights from the unpruned network (we have used numpy format to save  and load the pre-trained weights)
+
+	# W_init = list(np.load('/~/VGG_MNIST/VGG_MNIST_baseline_200/best_weights_numpy.npy', allow_pickle=True))#list(np.load('/home/arshdeep/Pruning/SPL/VGG_pruned_Model/VGG-CIFAR100_Pruning/data/VGG_weights100.npy',allow_pickle=True))
+	W_init = torch.load(model_pann_trained)
+	W_init = [tensor.cpu().numpy() for tensor in W_init.values()]  # only need the weights, no need for keys because we have the indexes 
+
+	# Obtaining layer-wise importance scores of CNN filters
+	indexes = [8, 14, 20, 26, 32, 38, 44, 50, 56, 62, 68, 74, 80, 86, 92, 98, 104, 110, 116, 122, 128, 134, 140, 146, 152, 158, 164, 170, 176, 182, 188, 194, 200, 206, 212, 218, 224, 230, 236, 242, 248, 254, 260, 266, 272, 278, 284, 290, 296, 302, 308, 314]# indexes=[0,6,12,18,24,30,36,42,48,54,60,66,72] # indexes of convolution layers in W_init for VGG-16
+	# L=[1,2,3,4,5,6,7,8,9,10,11,12,13]  # convolutional layer number (for VGG-16, it is from 1 to 13)
+
+
+	for i, j in enumerate(indexes):
+		# print(i)
+		W_2D=W_init[j]
+		# print(W_2D.shape)
+		W=np.reshape(W_2D,(np.shape(W_2D)[2]*np.shape(W_2D)[3],np.shape(W_2D)[1],np.shape(W_2D)[0]))  # (kernel_size x kernel_size, channels_in_filter, amount_of_filters) different arrangement from paper
+		# print(np.shape(W),'layer  :','  ', j)
+		# print(np.shape(W),'shape of weights')
+		score_norm_m1 = operator_norm_pruning(W)
+		# print(np.argsort(score_norm_m1))
+		# Score_L1=CVPR_L1_Imp_index(W)  #l_1 entry wise norm based important scores
+		# Score_GM=CVPR_GM_Imp_index(W)  #Geomettric median based important scores
+		file_name='opnorm_pruning_layer_'+str(i)+'.npy'
+		np.save(f"compression/pruning_scores/{file_name}",np.argsort(score_norm_m1)) # save sorted arguments from low to high importance.
+
 
 # Proposed pruning framework
 def operator_norm_pruning(W):
@@ -50,29 +119,3 @@ def GM_Imp_index(W):
 		F_GM=gmean(np.abs(W[:,:,i]).flatten())
 		Diff.append((G_GM-F_GM)**2)
 	return Diff/np.max(Diff)	
-   
-# load weights from the unpruned network (we have used numpy format to save  and load the pre-trained weights)
-
-# W_init = list(np.load('/~/VGG_MNIST/VGG_MNIST_baseline_200/best_weights_numpy.npy', allow_pickle=True))#list(np.load('/home/arshdeep/Pruning/SPL/VGG_pruned_Model/VGG-CIFAR100_Pruning/data/VGG_weights100.npy',allow_pickle=True))
-W_init = torch.load(model_pann_trained)
-W_init = [tensor.cpu().numpy() for tensor in W_init.values()]  # only need the weights, no need for keys because we have the indexes 
-
-# Obtaining layer-wise importance scores of CNN filters
-indexes = [8, 14, 20, 26, 32, 38, 44, 50, 56, 62, 68, 74, 80, 86, 92, 98, 104, 110, 116, 122, 128, 134, 140, 146, 152, 158, 164, 170, 176, 182, 188, 194, 200, 206, 212, 218, 224, 230, 236, 242, 248, 254, 260, 266, 272, 278, 284, 290, 296, 302, 308, 314]# indexes=[0,6,12,18,24,30,36,42,48,54,60,66,72] # indexes of convolution layers in W_init for VGG-16
-# L=[1,2,3,4,5,6,7,8,9,10,11,12,13]  # convolutional layer number (for VGG-16, it is from 1 to 13)
-
-
-for i, j in enumerate(indexes):
-	# print(i)
-	W_2D=W_init[j]
-	# print(W_2D.shape)
-	W=np.reshape(W_2D,(np.shape(W_2D)[2]*np.shape(W_2D)[3],np.shape(W_2D)[1],np.shape(W_2D)[0]))  # (kernel_size x kernel_size, channels_in_filter, amount_of_filters) different arrangement from paper
-	# print(np.shape(W),'layer  :','  ', j)
-	# print(np.shape(W),'shape of weights')
-	score_norm_m1 = operator_norm_pruning(W)
-	# print(np.argsort(score_norm_m1))
-	# Score_L1=CVPR_L1_Imp_index(W)  #l_1 entry wise norm based important scores
-	# Score_GM=CVPR_GM_Imp_index(W)  #Geomettric median based important scores
-	file_name='opnorm_pruning_layer_'+str(i)+'.npy'
-	np.save(f"compression/pruning_scores/{file_name}",np.argsort(score_norm_m1)) # save sorted arguments from low to high importance.
-	

@@ -1,9 +1,7 @@
 from torch.utils.tensorboard import SummaryWriter
 import pandas as pd
-import seaborn as sn
 import numpy as np
 from datetime import datetime
-from functools import partial
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import multilabel_confusion_matrix, ConfusionMatrixDisplay
 import torch
@@ -11,15 +9,15 @@ import time
 from torchmetrics.classification import BinaryAccuracy, BinaryConfusionMatrix
 from torch import nn, optim
 import os
-from PIL import Image
 from tempfile import TemporaryDirectory
-from torch.utils.data import DataLoader, Dataset
-from torchvision import transforms, datasets
-from compression.evaluation import print_model_size, evaluate
-from compression.models.PANN_pretrained import MobileNetV2, loss_func
-from compression.models.AT_pretrained import MN, _mn_conf
+from torch.utils.data import DataLoader
+from torchvision import transforms
+from compression.evaluation import calculate_per_class_lwlrap, print_model_size
+from compression.models.PANN_pretrained import MobileNetV2
 from compression.models.PANN_pruned import MobileNetV2_pruned
-from compression.preprocessing import convert_dataset, load_pkl, save_images, get_labels, convert_labels
+from compression.preprocessing import TrainDataset, convert_dataset, load_pkl, get_labels, convert_labels
+from compression.pruning import import_pruned_weights
+from compression.quantization import pann_qat_v1, pann_qat_v2, pann_sq
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # ------------- Testing Env
 TENSORBOARD = False
@@ -30,7 +28,6 @@ PANN_QAT = False
 PANN_QAT_V2 = False      
 PANN_SQ = False         
 PRUNING = True; P=0.5
-MODEL_AT = False
 # ------------- Variables
 training_audio_data = "data/audio/train_curated"
 val_audio_data = "data/audio/test"
@@ -55,7 +52,6 @@ def main():
         # convert_dataset(pd.read_csv(test_audio_labels), val_audio_data, val_data)
         # data = load_pkl(training_data)
         # save_images(data, True)
-        # print(train["0a9bebde.wav"].shape)
     transform = transforms.Compose([
         transforms.Resize(image_size),
         transforms.ToTensor()
@@ -90,10 +86,6 @@ def main():
 
         print_model_size(model)
 
-        # Freeze weights -> worse performance: best lwlrap of 70 in 300 epochs
-        # for param in model.features.parameters():
-        #     param.requires_grad = False
-
         # Initialize layers that are not frozen
         model.bn0 = nn.BatchNorm2d(128)
         model.fc1 = nn.Linear(in_features=1280, out_features=256, bias=True)    # out_features tested: 1024(pretty bad), 512(ok), 128(okok)
@@ -112,123 +104,20 @@ def main():
         else:
             model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
 
-        # top1, top5, inference_time = evaluate(model, val_dataloader, classes)
-        # print(f"Evaluation accuracy on {len(val_dataset)} images: {top1}, {top5}")
-        # print("Average inference time: %.4fs" %(inference_time/len(val_dataset)))
-    elif(PANN_QAT):
-        # Tensorboard
-        today = datetime.now()
-        date = today.strftime('%b%d_%y-%H-%M')
-        model_dir = f"compression/runs/PANN_QAT/{date}"
-        if TENSORBOARD: writer = SummaryWriter(model_dir)
-
-        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 527, True).to(device)
-        pretrained_weights = torch.load(model_pann)["model"] # keys: {iteration: , model: }
-        model.load_state_dict(pretrained_weights)
-
-        print_model_size(model)
-
-        # Freeze weights
-        for param in model.features.parameters():
-            param.requires_grad = False
-
-        # Initialize layers that are not frozen
-        model.bn0 = nn.BatchNorm2d(128)
-        model.fc1 = nn.Linear(in_features=1280, out_features=256, bias=True)    # out_features tested: 1024(pretty bad), 512(ok), 128(okok)
-        model.fc_audioset = nn.Linear(256, n_classes, bias=True)
-
-        model.cuda()
-        model.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
-        torch.ao.quantization.prepare_qat(model, inplace=True)
-       
-        optimizer = optim.Adam(model.parameters(), lr=0.001)
-        exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
-        if TENSORBOARD:
-            model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, writer)
-            writer.flush()
-            writer.close()
-
-            model.to("cpu") # Needed for quatization convert
-            model_qat = torch.quantization.convert(model.eval(), inplace=False)
-
-            torch.save(model_qat.state_dict(), f"{model_dir}/model_pann_qat.pt")
-        else:
-            model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
-            model.to("cpu") # Needed for quatization convert
-            # model_scripted = torch.jit.script(model) # Export to TorchScript
-            # model_scripted.save('model_scripted.pt') # Save
-            model_qat = torch.quantization.convert(model.eval(), inplace=False)
-            
-                    
-        print_model_size(model_qat)
+    elif(PANN_QAT):          
+        model_qat = pann_qat_v1(TENSORBOARD, model_pann, n_classes, dataloaders, n_epochs) 
     elif(PANN_QAT_V2):
-        # Tensorboard
-        today = datetime.now()
-        date = today.strftime('%b%d_%y-%H-%M')
-        model_dir = f"compression/runs/PANN_QAT_v2/{date}"
-        if TENSORBOARD: writer = SummaryWriter(model_dir)
-
-        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
-        pretrained_weights = torch.load(model_pann_trained)
-        model.load_state_dict(pretrained_weights)
-
-        print_model_size(model)
-
-        model.cuda()
-        model.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
-        torch.ao.quantization.prepare_qat(model, inplace=True)
-       
-        optimizer = optim.Adam(model.parameters(), lr=0.001)
-        exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
-        if TENSORBOARD:
-            model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, writer)
-            writer.flush()
-            writer.close()
-
-            model.to("cpu") # Needed for quatization convert
-            model_qat = torch.quantization.convert(model.eval(), inplace=False)
-
-            torch.save(model_qat.state_dict(), f"{model_dir}/model_pann_qat_v2.pt")
-        else:
-            model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
-            model.to("cpu") # Needed for quatization convert
-            model_qat = torch.quantization.convert(model.eval(), inplace=False)
-                    
-        print_model_size(model_qat)
+        model_qat = pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs) 
     elif(PANN_SQ):
-        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True)
-        pretrained_weights = torch.load(model_pann_trained)
-        model.load_state_dict(pretrained_weights)
-
-        print_model_size(model) 
-
-        model.qconfig = torch.ao.quantization.get_default_qconfig('x86')
-        torch.backends.quantized.engine = 'x86'
-        model_static_quantized = torch.quantization.prepare(model, inplace=False)
-        model_static_quantized = torch.quantization.convert(model_static_quantized, inplace=False)
-                    
-        print_model_size(model_static_quantized)
-        torch.save(model_static_quantized.state_dict(), f"resources/model_pann_sq.pt")
+        model_sq = pann_sq()
     elif(PRUNING):
-        # Pruned Model
-        indexes = [8, 14, 20, 26, 32, 38, 44, 50, 56, 62, 68, 74, 80, 86, 92, 98, 104, 110, 116, 122, 128, 134, 140, 146, 152, 158, 164, 170, 176, 182, 188, 194, 200, 206, 212, 218, 224, 230, 236, 242, 248, 254, 260, 266, 272, 278, 284, 290, 296, 302, 308, 314]
         model_pruned = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
-        # print(model_pruned)
-        # return
-        # Original Model
-        # model_original = torch.load(model_pann_trained)
-        # model_original_subscr = list(model_original.values())
         model_original = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
         pretrained_weights = torch.load(model_pann_trained)
         model_original.load_state_dict(pretrained_weights)
 
         print_model_size(model_original)
 
-        # layers = len(indexes)
-        # w = []
-        # for i in range(layers):
-        #     w.append(sorted(np.load(f"compression/pruning_scores/opnorm_pruning_layer_{i}.npy")))
-        
         # with torch.no_grad():
         #     i = 0
         #     for name, param in model_pruned.named_parameters():
@@ -236,113 +125,10 @@ def main():
         #         i += 1
         #     print(i)
         # return
-        with torch.no_grad():
-            k = 0
-            prev_pruned_weights = None  # in_channel
-            for i, layer in enumerate(model_original.named_parameters()): 
-                layer = layer[0]
-                layer_name = layer.split(".")
-
-                model_copy_pruned = model_pruned
-                model_copy_original = model_original
-                current_layer_pruned = None
-                current_layer_original = None
-
-                for j in range(len(layer_name)-1):
-                    current_layer_pruned = getattr(model_copy_pruned, layer_name[j])
-                    current_layer_original = getattr(model_copy_original, layer_name[j])
-                    model_copy_pruned = current_layer_pruned
-                    model_copy_original = current_layer_original
-                
-                if k <= 51: # just for the last batchnorm/activation layer so we dont get file doesnt exist error (todo better fix)
-                    pruned_weights = np.load(f"compression/pruning_scores/opnorm_pruning_layer_{k}.npy")
-                    pruned_weights = sorted(pruned_weights[int(np.ceil(len(pruned_weights)*P)):])   # out_channel
-
-                if i >= 5 and i < 161: # until last non-fully connected node
-                    # print(f"{layer}, {i} -----------------------------")
-                    W = current_layer_original.state_dict()
-                    for key in W.keys():
-                        if key == 'num_batches_tracked':
-                            continue
-                        if len(W[key].shape) == 1:   # Batchnorm or activation layer
-                            W[key] = W[key][prev_pruned_weights]
-                        else: # Convulutional layer
-                            if(current_layer_original.state_dict()[key].shape[1] == 1): # Conv layer with groups element
-                                W[key] = W[key][pruned_weights,:,:,:]
-                            else:
-                                W[key] = W[key][pruned_weights,:,:,:]
-                                W[key] = W[key][:,prev_pruned_weights,:,:]
-                            k += 1
-                            prev_pruned_weights = pruned_weights
-                        # print(W[key].shape, current_layer_original.state_dict()[key].shape)
-                    current_layer_pruned.load_state_dict(W)
-                # Randomly initialize fully connected layers
+        model_pruned = import_pruned_weights(model_original, model_pruned, P)
         
         print_model_size(model_pruned)
         torch.save(model_pruned.state_dict(), f"resources/model_pann_pruned_{P}.pt")
-
-                
-
-
-
-    elif(MODEL_AT):
-        # Tensorboard
-        today = datetime.now()
-        date = today.strftime('%b%d_%y-%H-%M')
-        model_dir = f"compression/runs/AT/{date}"
-        if TENSORBOARD: writer = SummaryWriter(model_dir)
-
-        inverted_residual_setting, last_channel = _mn_conf()
-        model = MN(inverted_residual_setting=inverted_residual_setting, last_channel=last_channel, num_classes=527).to(device)
-        pretrained_weights = torch.load(model_at)
-        model.load_state_dict(pretrained_weights, strict=False)
-
-        print_model_size(model)
-
-        # Freeze weights
-        # for param in model.features.parameters():
-        #     param.requires_grad = False
-
-        # Initialize layers that are not frozen
-        model.classifier[2] = nn.Linear(in_features=960, out_features=512, bias=True)   # out_features: 1280(bad), 512
-        model.classifier[5] = nn.Linear(512, n_classes, bias=True)
-
-        optimizer = optim.Adam(model.parameters(), lr=0.001)
-        exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
-        model.cuda()
-        if TENSORBOARD:
-            model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, writer)
-            writer.flush()
-            writer.close()
-
-            torch.save(model.state_dict(), f"{model_dir}/model_at.pt")
-        else:
-            model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs)
-    return
-
-class TrainDataset(Dataset):
-    def __init__(self, mels, labels, transforms):
-        super().__init__()
-        self.mels = mels
-        self.labels = labels
-        self.transforms = transforms
-        
-    def __len__(self):
-        return len(self.mels)
-    
-    def __getitem__(self, idx):
-        image = Image.fromarray(self.mels[idx], mode='L') # Grayscale
-        # image = Image.fromarray(self.mels[idx], mode='RGB') # RGB
-        image = self.transforms(image).div_(255)
-        
-        label = self.labels[idx]
-        # label = torch.tensor([classes[l] for l in label])
-        # label = np.array([classes[l] for l in label])
-
-        one_hot_vector = np.zeros(len(classes), dtype=int)
-        one_hot_vector[label] = 1
-
-        return image, one_hot_vector
 
 def train_model(model, dataloaders, optimizer, scheduler, num_epochs, writer=None):
     since = time.time()
@@ -397,16 +183,8 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs, writer=Non
                         if MODEL_PANN or PANN_QAT or PANN_QAT_V2:
                             # Outputs: {"clipwise_output": [batch_size, num_classes], "Embedding": }
                             outputs = model(inputs)["clipwise_output"]
-                        elif MODEL_AT:
-                            outputs = model(inputs)[0]
                         else:
                             outputs = model(inputs)
-
-
-                        # if(epoch == 5 or epoch == 10 or epoch == 1):
-                        #     print(torch.max(model.fc1.weight))
-
-                        # loss = loss_func(outputs, labels)
 
                         criterion = nn.BCEWithLogitsLoss() # With logits because last layer in network is not an activation function!
                         loss = criterion(outputs, labels.float())
@@ -433,12 +211,6 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs, writer=Non
                     running_corrects += metric(outputs, labels) 
                 if phase == 'train':
                     scheduler.step()
-                # print(valid_preds[0])
-                # print(train_preds[-1])
-                # score, weight = calculate_per_class_lwlrap(y_trn, train_preds)
-                # train_lwlrap = (score * weight).sum()
-                # print(train_lwlrap)
-                
 
                 epoch_loss = running_loss / len(dataloaders[phase])
                 epoch_acc = running_corrects.double() / len(dataloaders[phase])
@@ -499,14 +271,10 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs, writer=Non
             for cl, id in classes.items():
                 tensorboard_truth = (trn_truth[:, id] == 1).astype(int)
                 tensorboard_probs = train_preds[:, id]
-                # print(tensorboard_truth)
-                # print(np.sort(tensorboard_probs)[::-1][:10])
                 writer.add_pr_curve(f"{cl}/train", tensorboard_truth, tensorboard_probs)
 
                 tensorboard_truth = (val_truth[:, id] == 1).astype(int)
                 tensorboard_probs = valid_preds[:, id]
-                # print(tensorboard_truth)
-                # print(tensorboard_probs)
                 writer.add_pr_curve(f"{cl}/val", tensorboard_truth, tensorboard_probs)
             
             # Create Confusion matrix in Tensorboard
@@ -528,88 +296,6 @@ def train_model(model, dataloaders, optimizer, scheduler, num_epochs, writer=Non
         # load best model weights
         model.load_state_dict(torch.load(best_model_params_path))
     return model
-
-def _one_sample_positive_class_precisions(scores, truth):
-    """Calculate precisions for each true class for a single sample.
-
-    Args:
-      scores: np.array of (num_classes,) giving the individual classifier scores.
-      truth: np.array of (num_classes,) bools indicating which classes are true.
-
-    Returns:
-      pos_class_indices: np.array of indices of the true classes for this sample.
-      pos_class_precisions: np.array of precisions corresponding to each of those
-        classes.
-    """
-    num_classes = scores.shape[0]
-    pos_class_indices = np.flatnonzero(truth > 0)
-    # Only calculate precisions if there are some true classes.
-    if not len(pos_class_indices):
-        return pos_class_indices, np.zeros(0)
-    # Retrieval list of classes for this sample.
-    retrieved_classes = np.argsort(scores)[::-1]
-    # class_rankings[top_scoring_class_index] == 0 etc.
-    class_rankings = np.zeros(num_classes, dtype=np.int32)
-    class_rankings[retrieved_classes] = range(num_classes)
-    # Which of these is a true label?
-    retrieved_class_true = np.zeros(num_classes, dtype=np.bool_)
-    retrieved_class_true[class_rankings[pos_class_indices]] = True
-    # Num hits for every truncated retrieval list.
-    retrieved_cumulative_hits = np.cumsum(retrieved_class_true)
-    # Precision of retrieval list truncated at each hit, in order of pos_labels.
-    precision_at_hits = (
-            retrieved_cumulative_hits[class_rankings[pos_class_indices]] /
-            (1 + class_rankings[pos_class_indices].astype(np.float64)))
-    return pos_class_indices, precision_at_hits
-
-def calculate_per_class_lwlrap(truth, scores):
-    """Calculate label-weighted label-ranking average precision.
-
-    Arguments:
-      truth: np.array of (num_samples, num_classes) giving boolean ground-truth
-        of presence of that class in that sample.
-      scores: np.array of (num_samples, num_classes) giving the classifier-under-
-        test's real-valued score for each class for each sample.
-
-    Returns:
-      per_class_lwlrap: np.array of (num_classes,) giving the lwlrap for each
-        class.
-      weight_per_class: np.array of (num_classes,) giving the prior of each
-        class within the truth labels.  Then the overall unbalanced lwlrap is
-        simply np.sum(per_class_lwlrap * weight_per_class)
-    """
-    labels = []
-    for label in truth:
-        one_hot_vector = np.zeros(len(classes), dtype=int)
-        one_hot_vector[label] = 1
-        labels.append(one_hot_vector)
-
-    # print(f"labels: {labels[0]}")
-    # print(f"scores: {scores[0]}")
-    truth = np.array(labels)
-    scores = np.array(scores)
-    assert truth.shape == scores.shape
-    num_samples, num_classes = scores.shape
-    # Space to store a distinct precision value for each class on each sample.
-    # Only the classes that are true for each sample will be filled in.
-    precisions_for_samples_by_classes = np.zeros((num_samples, num_classes))
-    for sample_num in range(num_samples):
-        pos_class_indices, precision_at_hits = (
-            _one_sample_positive_class_precisions(scores[sample_num, :],
-                                                  truth[sample_num, :]))
-        precisions_for_samples_by_classes[sample_num, pos_class_indices] = (
-            precision_at_hits)
-    labels_per_class = np.sum(truth > 0, axis=0)
-    weight_per_class = labels_per_class / float(np.sum(labels_per_class))
-    # Form average of each column, i.e. all the precisions assigned to labels in
-    # a particular class.
-    per_class_lwlrap = (np.sum(precisions_for_samples_by_classes, axis=0) /
-                        np.maximum(1, labels_per_class))
-    # overall_lwlrap = simple average of all the actual per-class, per-sample precisions
-    #                = np.sum(precisions_for_samples_by_classes) / np.sum(precisions_for_samples_by_classes > 0)
-    #           also = weighted mean of per-class lwlraps, weighted by class label prior across samples
-    #                = np.sum(per_class_lwlrap * weight_per_class)
-    return per_class_lwlrap, weight_per_class
 
 if __name__ == "__main__":
     main()
