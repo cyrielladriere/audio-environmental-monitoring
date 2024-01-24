@@ -1,10 +1,23 @@
 # https://github.com/Arshdeep-Singh-Boparai/Efficient_CNNs_passive_filter_pruning/blob/main/Proposed_pruning.py
 # Script to obtain importance of filters using the proposed operato norm pruning method, entry-wise l_1 norm based scores and geometric median based scores.
 import numpy as np    
-import os
 import torch
 from scipy.stats.mstats import gmean
-from scipy.spatial import distance
+from torch import nn, optim
+from compression.training import train_model
+
+def opnorm_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, writer=None):
+	optimizer = optim.Adam(model_pruned.parameters(), lr=0.001)
+	exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
+	model_pruned.cuda()
+	if TENSORBOARD:
+		model_pruned = train_model(model_pruned, dataloaders, optimizer, exp_lr_scheduler, n_epochs, data, threshold, batch_size, True, TENSORBOARD, writer)
+		writer.flush()
+		writer.close()
+
+		torch.save(model_pruned.state_dict(), f"{model_dir}/model_opnorm_pruning_{P}_FT.pt")
+	else:
+		model_pruned = train_model(model_pruned, dataloaders, optimizer, exp_lr_scheduler, n_epochs, data, threshold, batch_size, True, TENSORBOARD)
 
 def import_pruned_weights(model_original, model_pruned, P):
 	with torch.no_grad():
@@ -50,7 +63,7 @@ def import_pruned_weights(model_original, model_pruned, P):
 				# Randomly initialize fully connected layers
 		return model_pruned
 
-def get_pruned_layers():
+def save_pruned_layers():
 	model_pann_trained = "resources/model_pann.pt"
 
 	# load weights from the unpruned network (we have used numpy format to save  and load the pre-trained weights)

@@ -14,7 +14,7 @@ def pann_qat_v1(TENSORBOARD, model_pann, n_classes, dataloaders, n_epochs, data,
     model_dir = f"compression/runs/PANN_QAT/{date}"
     if TENSORBOARD: writer = SummaryWriter(model_dir)
 
-    model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 527, True).to(device)
+    model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 527, quantize=True).to(device)
     pretrained_weights = torch.load(model_pann)["model"] # keys: {iteration: , model: }
     model.load_state_dict(pretrained_weights)
 
@@ -60,7 +60,7 @@ def pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, th
     model_dir = f"compression/runs/PANN_QAT_v2/{date}"
     if TENSORBOARD: writer = SummaryWriter(model_dir)
 
-    model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
+    model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, quantize=True, post_training=True).to(device)
     pretrained_weights = torch.load(model_pann_trained)
     model.load_state_dict(pretrained_weights)
 
@@ -90,7 +90,7 @@ def pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, th
 
 
 def pann_sq(model_pann_trained):
-    model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True)
+    model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, quantize=True, post_training=True)
     pretrained_weights = torch.load(model_pann_trained)
     model.load_state_dict(pretrained_weights)
 

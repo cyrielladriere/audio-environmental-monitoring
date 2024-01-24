@@ -10,7 +10,7 @@ from compression.evaluation import print_model_size
 from compression.models.PANN_pretrained import MobileNetV2
 from compression.models.PANN_pruned import MobileNetV2_pruned
 from compression.preprocessing import TrainDataset, convert_dataset, load_pkl, get_labels, convert_labels
-from compression.pruning import import_pruned_weights
+from compression.pruning import import_pruned_weights, opnorm_fine_tuning, save_pruned_layers
 from compression.quantization import pann_qat_v1, pann_qat_v2, pann_sq
 from compression.training import train_model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -20,9 +20,9 @@ TENSORBOARD = False
 PREPROCESSING = False
 MODEL_PANN = False
 PANN_QAT = False
-PANN_QAT_V2 = False      
+PANN_QAT_V2 = False
 PANN_SQ = False         
-PRUNING = True; P=0.5
+OPNORM_PRUNING = True; P=0.5
 # ------------- Variables
 training_audio_data = "data/audio/train_curated"
 val_audio_data = "data/audio/test"
@@ -37,7 +37,7 @@ model_at = "resources/mn10_as.pt"
 image_size = (256, 128)
 threshold = 0.5
 batch_size = 64
-n_epochs = 3
+n_epochs = 300
 n_classes = 80
 classes = {'Bark': 0, 'Motorcycle': 1, 'Writing': 2, 'Female_speech_and_woman_speaking': 3, 'Tap': 4, 'Child_speech_and_kid_speaking': 5, 'Screaming': 6, 'Meow': 7, 'Scissors': 8, 'Fart': 9, 'Car_passing_by': 10, 'Harmonica': 11, 'Sink_(filling_or_washing)': 12, 'Burping_and_eructation': 13, 'Slam': 14, 'Drawer_open_or_close': 15, 'Cricket': 16, 'Hiss': 17, 'Frying_(food)': 18, 'Sneeze': 19, 'Chink_and_clink': 20, 'Fill_(with_liquid)': 21, 'Crowd': 22, 'Marimba_and_xylophone': 23, 'Sigh': 24, 'Accordion': 25, 'Electric_guitar': 26, 'Cupboard_open_or_close': 27, 'Bicycle_bell': 28, 'Waves_and_surf': 29, 'Stream': 30, 'Bus': 31, 'Toilet_flush': 32, 'Trickle_and_dribble': 33, 'Tick-tock': 34, 'Keys_jangling': 35, 'Acoustic_guitar': 36, 'Finger_snapping': 37, 'Cheering': 38, 'Race_car_and_auto_racing': 39, 'Bass_guitar': 40, 'Yell': 41, 'Water_tap_and_faucet': 42, 'Run': 43, 'Traffic_noise_and_roadway_noise': 44, 'Crackle': 45, 'Skateboard': 46, 'Glockenspiel': 47, 'Computer_keyboard': 48, 'Whispering': 49, 'Zipper_(clothing)': 50, 'Microwave_oven': 51, 'Bathtub_(filling_or_washing)': 52, 'Male_speech_and_man_speaking': 53, 'Gong': 54, 'Shatter': 55, 'Strum': 56, 'Bass_drum': 57, 'Dishes_and_pots_and_pans': 58, 'Accelerating_and_revving_and_vroom': 59, 'Male_singing': 60, 'Gurgling': 61, 'Walk_and_footsteps': 62, 'Printer': 63, 'Cutlery_and_silverware': 64, 'Chirp_and_tweet': 65, 'Clapping': 66, 'Hi-hat': 67, 'Raindrop': 68, 'Gasp': 69, 'Buzz': 70, 'Drip': 71, 'Chewing_and_mastication': 72, 'Squeak': 73, 'Female_singing': 74, 'Church_bell': 75, 'Mechanical_fan': 76, 'Purr': 77, 'Applause': 78, 'Knock': 79}
 
@@ -104,7 +104,13 @@ def main():
         model_qat = pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size) 
     elif(PANN_SQ):
         model_sq = pann_sq(model_pann_trained)
-    elif(PRUNING):
+    elif(OPNORM_PRUNING):
+        # save_pruned_layers()
+        today = datetime.now()
+        date = today.strftime('%b%d_%y-%H-%M')
+        model_dir = f"compression/runs/OPNORM_PRUNING/{date}"
+        if TENSORBOARD: writer = SummaryWriter(model_dir)
+
         model_pruned = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
         model_original = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
         pretrained_weights = torch.load(model_pann_trained)
@@ -121,8 +127,12 @@ def main():
         # return
         model_pruned = import_pruned_weights(model_original, model_pruned, P)
         
-        print_model_size(model_pruned)
         torch.save(model_pruned.state_dict(), f"resources/model_pann_pruned_{P}.pt")
+        if TENSORBOARD:
+            opnorm_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, writer)
+        else:
+            opnorm_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD)
+        print_model_size(model_pruned)
 
 if __name__ == "__main__":
     main()

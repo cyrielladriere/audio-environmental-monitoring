@@ -27,7 +27,7 @@ class InvertedResidual(nn.Module):
 
         hidden_dim = round(inp * expand_ratio)
         filters = int(hidden_dim*(1-P))
-        self.use_res_connect = self.stride == 1 and inp == oup
+        self.use_res_connect = self.stride == 1 and int(inp*(1-P)) == oup
 
         if expand_ratio == 1:
             _layers = [
