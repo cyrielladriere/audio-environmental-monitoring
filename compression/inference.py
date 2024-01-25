@@ -1,9 +1,9 @@
-from compression.evaluation import calculate_per_class_lwlrap
+from compression.evaluation import calculate_per_class_lwlrap, print_model_size
 from compression.models.PANN_pruned import MobileNetV2_pruned
 from compression.preprocessing import load_pkl, get_labels, convert_labels
 from torchvision import transforms, datasets
 from compression.main import TrainDataset
-
+from thop import profile
 from torch.utils.data import DataLoader, Dataset
 import torch
 from torch import nn
@@ -14,8 +14,8 @@ from torchmetrics.classification import BinaryAccuracy, BinaryConfusionMatrix
 device = "cpu"
 # ------------- Testing Env
 MODEL_PANN = False
-PANN_QAT = False
-PANN_QAT_V2 = True      
+PANN_QAT = True
+PANN_QAT_V2 = False      
 PANN_SQ = False         
 OPNORM_PRUNING = False; P=0.5
 # ------------- Variables
@@ -55,24 +55,17 @@ def main():
         model.eval()
         predict(model, dataloader)
     elif(PANN_QAT):
-        # model = torch.jit.load('model_scripted.pt')
-        # model.eval()
-        # predict(model, dataloader)
         model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True, quantize=True)
         model.to("cpu")
         pretrained_weights = torch.load(model_pann_qat)
+
         model.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
         torch.ao.quantization.prepare_qat(model, inplace=True)
         model = torch.quantization.convert(model.eval(), inplace=True)
-        # https://discuss.pytorch.org/t/error-in-running-quantised-model-runtimeerror-could-not-run-quantized-conv2d-new-with-arguments-from-the-cpu-backend/151718/3
+
         model.load_state_dict(pretrained_weights)
         model.eval()
         predict(model, dataloader)
-        # # model_fp32.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
-        # # torch.ao.quantization.prepare_qat(model_fp32, inplace=True)
-        # # model_fp32.to("cpu") # Needed for quatization convert
-        # # model = torch.quantization.convert(model_fp32.eval(), inplace=False)
-        # # pretrained_weights = torch.load(model_pann_qat)
     elif(PANN_QAT_V2):
         model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True, quantize=True)
         model.to("cpu")
@@ -86,7 +79,7 @@ def main():
         model.eval()
         predict(model, dataloader)
     elif(PANN_SQ):
-        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True)
+        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, quantize=True, post_training=True)
         pretrained_weights = torch.load(model_pann_sq)
 
         model.qconfig = torch.ao.quantization.get_default_qconfig('x86')
@@ -95,7 +88,6 @@ def main():
         model = torch.quantization.convert(model, inplace=True)
 
         model.load_state_dict(pretrained_weights)
-
         model.eval()
         predict(model, dataloader)
     elif(OPNORM_PRUNING):
@@ -103,9 +95,11 @@ def main():
         pretrained_weights = torch.load(model_pann_opnorm_pruning)
 
         model.load_state_dict(pretrained_weights)
-        # model.cuda()
         model.eval()
         predict(model, dataloader)
+
+    print_model_size(model, macs=True)
+
         
 def predict(model, dataloader):
     start = time.time()
@@ -127,7 +121,7 @@ def predict(model, dataloader):
             bcm = BinaryConfusionMatrix(threshold=threshold).to(device)
             
             
-            if MODEL_PANN or PANN_QAT or PANN_QAT_V2 or OPNORM_PRUNING:
+            if MODEL_PANN or PANN_QAT or PANN_QAT_V2 or OPNORM_PRUNING or PANN_SQ:
                 # Outputs: {"clipwise_output": [batch_size, num_classes], "Embedding": }
                 outputs = model(inputs)["clipwise_output"]
             else:

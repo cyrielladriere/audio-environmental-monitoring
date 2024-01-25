@@ -47,8 +47,6 @@ def pann_qat_v1(TENSORBOARD, model_pann, n_classes, dataloaders, n_epochs, data,
     else:
         model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, data, threshold, batch_size, True, TENSORBOARD)
         model.to("cpu") # Needed for quatization convert
-        # model_scripted = torch.jit.script(model) # Export to TorchScript
-        # model_scripted.save('model_scripted.pt') # Save
         model_qat = torch.quantization.convert(model.eval(), inplace=False)
     print_model_size(model_qat)
     return model_qat

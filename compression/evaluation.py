@@ -111,7 +111,7 @@ class AverageMeter(object):
         fmtstr = f'{self.name} {self.val}' # ({avg' + self.fmt + '})'
         return fmtstr
 
-def print_model_size(mdl):
+def print_model_size(mdl, macs=False):
     """Prints the size of the given model in Megabytes"""
     torch.save(mdl.state_dict(), "tmp.pt")
     print("Size: ", end="")
@@ -119,13 +119,15 @@ def print_model_size(mdl):
     os.remove('tmp.pt')
 
     total_params = sum(param.numel() for param in mdl.parameters())
-    print(f"Number of parameters: {total_params}")
+    print(f"Number of parameters: {total_params/1e3: .2f} (K)")
 
     trainable_params = sum(p.numel() for p in mdl.parameters() if p.requires_grad)
-    print(f"Number of trainable parameters: {trainable_params}")
+    print(f"Number of trainable parameters: {trainable_params/1e3: .2f} (K)")
 
-    # macs, params = profile(mdl, inputs=(torch.randn(1, 1, 256, 128))) #image size: (256,128)
-    # print(f"MACs(G): {macs}")
+    if macs:
+        input = torch.randn(1, 1, 256, 128)
+        macs, params = profile(mdl, inputs=(input,), verbose=False) #image size: (256,128)
+        print(f"MACs(G): {macs/1e6: .2f} (M)")
 
 def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
