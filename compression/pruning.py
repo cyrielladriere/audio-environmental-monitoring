@@ -7,7 +7,7 @@ from torch import nn, optim
 from compression.training import train_model
 
 def opnorm_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, writer=None):
-	optimizer = optim.Adam(model_pruned.parameters(), lr=0.001)
+	optimizer = optim.Adam(model_pruned.parameters(), lr=0.0005)
 	exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
 	model_pruned.cuda()
 	if TENSORBOARD:
@@ -54,8 +54,8 @@ def import_pruned_weights(model_original, model_pruned, P):
 						if(current_layer_original.state_dict()[key].shape[1] == 1): # Conv layer with groups element
 							W[key] = W[key][pruned_weights,:,:,:]
 						else:
-							W[key] = W[key][pruned_weights,:,:,:]
 							W[key] = W[key][:,prev_pruned_weights,:,:]
+							W[key] = W[key][pruned_weights,:,:,:]
 						k += 1
 						prev_pruned_weights = pruned_weights
 					# print(W[key].shape, current_layer_original.state_dict()[key].shape)

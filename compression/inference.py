@@ -14,9 +14,9 @@ from torchmetrics.classification import BinaryAccuracy, BinaryConfusionMatrix
 device = "cpu"
 # ------------- Testing Env
 MODEL_PANN = False
-PANN_QAT = True
+PANN_QAT = False
 PANN_QAT_V2 = False      
-PANN_SQ = False         
+PANN_SQ = True         
 OPNORM_PRUNING = False; P=0.5
 # ------------- Variables
 audio_data = "data/train_curated"

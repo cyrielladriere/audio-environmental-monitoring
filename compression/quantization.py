@@ -1,3 +1,4 @@
+# Fusing: https://github.com/Sanjana7395/static_quantization/blob/master/quantization%20pytorch.ipynb
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 from compression.training import train_model
@@ -87,7 +88,7 @@ def pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, th
     return model_qat
 
 
-def pann_sq(model_pann_trained):
+def pann_sq(model_pann_trained, dataloaders):
     model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, quantize=True, post_training=True)
     pretrained_weights = torch.load(model_pann_trained)
     model.load_state_dict(pretrained_weights)
@@ -96,8 +97,18 @@ def pann_sq(model_pann_trained):
 
     model.qconfig = torch.ao.quantization.get_default_qconfig('x86')
     torch.backends.quantized.engine = 'x86'
-    model_static_quantized = torch.quantization.prepare(model, inplace=False)
-    model_static_quantized = torch.quantization.convert(model_static_quantized, inplace=False)
+    model = torch.quantization.prepare(model)
+
+    # calibrate the prepared model to determine quantization parameters for activations
+    # in a real world setting, the calibration would be done with a representative dataset (https://pytorch.org/docs/stable/quantization.html)
+    for data in dataloaders["train"]:
+        inputs, labels = data  # Shape inputs: [batch_size, channels, height, width]
+        model(inputs)
+    for data in dataloaders["val"]:
+        inputs, labels = data  # Shape inputs: [batch_size, channels, height, width]
+        model(inputs)
+
+    model_static_quantized = torch.quantization.convert(model, inplace=False)
                 
     torch.save(model_static_quantized.state_dict(), f"resources/model_pann_sq.pt")
     print_model_size(model_static_quantized)

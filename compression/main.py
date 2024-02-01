@@ -22,7 +22,7 @@ MODEL_PANN = False
 PANN_QAT = False
 PANN_QAT_V2 = False
 PANN_SQ = False         
-OPNORM_PRUNING = True; P=0.3
+OPNORM_PRUNING = True; P=0.1
 # ------------- Variables
 training_audio_data = "data/audio/train_curated"
 val_audio_data = "data/audio/test"
@@ -103,7 +103,7 @@ def main():
     elif(PANN_QAT_V2):
         model_qat = pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size) 
     elif(PANN_SQ):
-        model_sq = pann_sq(model_pann_trained)
+        model_sq = pann_sq(model_pann_trained, dataloaders)
     elif(OPNORM_PRUNING):
         # save_pruned_layers()
         today = datetime.now()
