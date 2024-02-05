@@ -6,7 +6,7 @@ from scipy.stats.mstats import gmean
 from torch import nn, optim
 from compression.training import train_model
 
-def opnorm_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, writer=None):
+def pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, writer=None, opnorm=True):
 	optimizer = optim.Adam(model_pruned.parameters(), lr=0.0005)
 	exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
 	model_pruned.cuda()
@@ -15,11 +15,12 @@ def opnorm_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, 
 		writer.flush()
 		writer.close()
 
-		torch.save(model_pruned.state_dict(), f"{model_dir}/model_opnorm_pruning_{P}_FT.pt")
+		filename = f"{model_dir}/model_opnorm_pruning_{P}_FT.pt" if opnorm else f"{model_dir}/model_L1_norm_pruning_{P}_FT.pt"
+		torch.save(model_pruned.state_dict(), filename)
 	else:
 		model_pruned = train_model(model_pruned, dataloaders, optimizer, exp_lr_scheduler, n_epochs, data, threshold, batch_size, True, TENSORBOARD)
 
-def import_pruned_weights(model_original, model_pruned, P):
+def import_pruned_weights(model_original, model_pruned, P, opnorm=True):
 	with torch.no_grad():
 		k = 0
 		prev_pruned_weights = None  # in_channel
@@ -39,7 +40,10 @@ def import_pruned_weights(model_original, model_pruned, P):
 				model_copy_original = current_layer_original
 			
 			if k <= 51: # just for the last batchnorm/activation layer so we dont get file doesnt exist error (todo better fix)
-				pruned_weights = np.load(f"compression/pruning_scores/opnorm_pruning_layer_{k}.npy")
+				if opnorm:
+					pruned_weights = np.load(f"compression/pruning_scores/opnorm/opnorm_pruning_layer_{k}.npy")
+				else:
+					pruned_weights = np.load(f"compression/pruning_scores/L1_norm/L1_norm_pruning_layer_{k}.npy")
 				pruned_weights = sorted(pruned_weights[int(np.ceil(len(pruned_weights)*P)):])   # out_channel
 
 			if i >= 5 and i < 161: # until last non-fully connected node
@@ -63,7 +67,7 @@ def import_pruned_weights(model_original, model_pruned, P):
 				# Randomly initialize fully connected layers
 		return model_pruned
 
-def save_pruned_layers():
+def save_pruned_layers(opnorm=True):
 	model_pann_trained = "resources/model_pann.pt"
 
 	# load weights from the unpruned network (we have used numpy format to save  and load the pre-trained weights)
@@ -84,13 +88,17 @@ def save_pruned_layers():
 		W=np.reshape(W_2D,(np.shape(W_2D)[2]*np.shape(W_2D)[3],np.shape(W_2D)[1],np.shape(W_2D)[0]))  # (kernel_size x kernel_size, channels_in_filter, amount_of_filters) different arrangement from paper
 		# print(np.shape(W),'layer  :','  ', j)
 		# print(np.shape(W),'shape of weights')
-		score_norm_m1 = operator_norm_pruning(W)
-		# print(np.argsort(score_norm_m1))
-		# Score_L1=CVPR_L1_Imp_index(W)  #l_1 entry wise norm based important scores
-		# Score_GM=CVPR_GM_Imp_index(W)  #Geomettric median based important scores
-		file_name='opnorm_pruning_layer_'+str(i)+'.npy'
-		np.save(f"compression/pruning_scores/{file_name}",np.argsort(score_norm_m1)) # save sorted arguments from low to high importance.
+		if opnorm:
+			score_norm_m1 = operator_norm_pruning(W)
+			file_name = 'opnorm_pruning_layer_'+str(i)+'.npy'
+			np.save(f"compression/pruning_scores/opnorm/{file_name}",np.argsort(score_norm_m1)) # save sorted arguments from low to high importance.
+		else:
+			score_L1= L1_Imp_index(W)  #l_1 entry wise norm based important scores
+			file_name = 'L1_norm_pruning_layer_'+str(i)+'.npy'
+			np.save(f"compression/pruning_scores/L1_norm/{file_name}",np.argsort(score_L1)) # save sorted arguments from low to high importance.
 
+		# print(np.argsort(score_norm_m1))
+		# Score_GM=CVPR_GM_Imp_index(W)  #Geomettric median based important scores
 
 # Proposed pruning framework
 def operator_norm_pruning(W):
