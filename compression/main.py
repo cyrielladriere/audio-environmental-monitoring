@@ -22,8 +22,8 @@ MODEL_PANN = False
 PANN_QAT = False
 PANN_QAT_V2 = False
 PANN_SQ = False         
-OPNORM_PRUNING = False; P=0.5
-L1_PRUNING = True;
+OPNORM_PRUNING = True; P=0.5
+L1_PRUNING = False;
 # ------------- Variables
 training_audio_data = "data/audio/train_curated"
 val_audio_data = "data/audio/test"

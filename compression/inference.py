@@ -1,12 +1,13 @@
+import pandas as pd
 from compression.evaluation import calculate_per_class_lwlrap, print_model_size
 from compression.models.PANN_pruned import MobileNetV2_pruned
-from compression.preprocessing import load_pkl, get_labels, convert_labels
+from compression.preprocessing import convert_dataset, load_pkl, get_labels, convert_labels
 from torchvision import transforms, datasets
 from compression.main import TrainDataset
 from thop import profile
 from torch.utils.data import DataLoader, Dataset
 import torch
-from torch import nn
+import os
 import numpy as np
 import time
 from compression.models.PANN_pretrained import MobileNetV2
@@ -15,10 +16,12 @@ device = "cpu"
 # ------------- Testing Env
 MODEL_PANN = False
 PANN_QAT = False
-PANN_QAT_V2 = False      
-PANN_SQ = True         
+PANN_QAT_V2 = True      
+PANN_SQ = False         
 OPNORM_PRUNING = False; P=0.5
 # ------------- Variables
+training_audio_labels = "data/audio/train_curated.csv"
+training_audio_data = "data/audio/train_curated"
 audio_data = "data/train_curated"
 model_pann = "resources/model_pann.pt"
 model_pann_qat = "resources/model_pann_qat.pt"
@@ -35,7 +38,8 @@ def main():
         transforms.Resize(image_size),
         transforms.ToTensor()
     ])
-
+    if not os.path.isfile(audio_data):
+        convert_dataset(pd.read_csv(training_audio_labels), training_audio_data, audio_data) 
     data = load_pkl(audio_data)
     global labels_global
     labels_global = get_labels(data.keys())
@@ -78,6 +82,7 @@ def main():
         model.load_state_dict(pretrained_weights)
         model.eval()
         predict(model, dataloader)
+
     elif(PANN_SQ):
         model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, quantize=True, post_training=True)
         pretrained_weights = torch.load(model_pann_sq)
