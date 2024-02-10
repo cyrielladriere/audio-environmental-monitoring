@@ -118,7 +118,8 @@ def predict(model, dataloader):
     avg_time = 0
     with torch.no_grad():
         for i, data in enumerate(dataloader):
-            if i > 100:
+            # Edge inference
+            if batch_size == 1 and i > 100:
                 break
             start_avg = time.time()
             inputs, labels = data
