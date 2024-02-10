@@ -30,7 +30,7 @@ model_pann_sq = "resources/model_pann_sq.pt"
 model_pann_opnorm_pruning = "resources/model_pann_pruned_0.5.pt"
 # ------------- Hyperparameters
 image_size = (256, 128)
-batch_size = 64
+batch_size = 1
 threshold = 0.5
 
 def main():
@@ -118,6 +118,8 @@ def predict(model, dataloader):
     avg_time = 0
     with torch.no_grad():
         for i, data in enumerate(dataloader):
+            if i > 100:
+                break
             start_avg = time.time()
             inputs, labels = data
             inputs = inputs.to(device) # Shape: [batch_size, channels, height, width]
