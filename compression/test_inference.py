@@ -7,9 +7,9 @@ device = "cpu"
 # ------------- Testing Env
 MODEL_PANN = False
 PANN_QAT = False
-PANN_QAT_V2 = True      
+PANN_QAT_V2 = False      
 PANN_SQ = False         
-OPNORM_PRUNING = False; P=0.5
+OPNORM_PRUNING = True; P=0.5
 # ------------- Variables
 model_pann = "resources/model_pann.pt"
 model_pann_qat = "resources/model_pann_qat.pt"
@@ -18,12 +18,13 @@ model_pann_sq = "resources/model_pann_sq.pt"
 model_pann_opnorm_pruning = "resources/model_pann_pruned_0.5.pt"
 # ------------- Hyperparameters
 image_size = (256, 128)
-batches = 100
+batches = 1000
 
 def main():
     if(MODEL_PANN):
         model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
-        pretrained_weights = torch.load(model_pann)
+        model.to("cpu")
+        pretrained_weights = torch.load(model_pann, map_location=torch.device("cpu"))
         model.load_state_dict(pretrained_weights)
         # model.cuda()
         model.eval()
@@ -55,10 +56,11 @@ def main():
 
     elif(PANN_SQ):
         model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, quantize=True, post_training=True)
+        model.to("cpu")
         pretrained_weights = torch.load(model_pann_sq)
 
         model.qconfig = torch.ao.quantization.get_default_qconfig('x86')
-        torch.backends.quantized.engine = 'x86'
+        # torch.backends.quantized.engine = 'x86'
         model = torch.quantization.prepare(model, inplace=True)
         model = torch.quantization.convert(model, inplace=True)
 
@@ -81,6 +83,7 @@ def test_predict(model):
     avg_time = 0
     with torch.no_grad():
         for i, data in enumerate(torch.rand(batches, 1, 1, image_size[0], image_size[1])): # shape: [amount_of_batches, batch_size, channels, height, width]
+            print(i)
             start_avg = time.time()
 
             inputs = data.to(device)

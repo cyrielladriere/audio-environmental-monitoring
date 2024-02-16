@@ -41,16 +41,16 @@ def main():
     if not os.path.isfile(audio_data):
         convert_dataset(pd.read_csv(training_audio_labels), training_audio_data, audio_data) 
     data = load_pkl(audio_data)
+    print("ok")
     global labels_global
     labels_global = get_labels(data.keys())
     labels_global = convert_labels(labels_global)
-
     dataset = TrainDataset(list(data.values()), labels_global, transform)
     global nr_instances
     nr_instances = len(list(data.values()))
 
     dataloader = DataLoader(dataset, batch_size=batch_size)
-
+    print("start")
     if(MODEL_PANN):
         model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
         pretrained_weights = torch.load(model_pann)
@@ -118,8 +118,9 @@ def predict(model, dataloader):
     avg_time = 0
     with torch.no_grad():
         for i, data in enumerate(dataloader):
+            print(i)
             # Edge inference
-            if batch_size == 1 and i > 100:
+            if batch_size == 1 and i > 10:
                 break
             start_avg = time.time()
             inputs, labels = data

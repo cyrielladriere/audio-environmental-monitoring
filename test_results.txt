@@ -1,0 +1,29 @@
+Model_PANN (1000):
+Total time: 932.72s, average inference time for 1batch: 930.1545ms
+Size: 14.85 MB
+Number of parameters:  3655.50 (K)
+Number of trainable parameters:  2572.05 (K)
+MACs(G):  193.01 (M)
+
+QAT_v2 (1000):
+Total time: 1371.69s, average inference time for 1batch: 1369.2543ms
+Size: 4.48 MB
+Number of parameters:  67.20 (K)
+Number of trainable parameters:  34.37 (K)
+MACs(G):  1.62 (M)
+
+PANN_SQ (1000):
+Total time: 1298.50s, average inference time for 1batch: 1296.0763ms
+Size: 4.48 MB
+Number of parameters:  67.20 (K)
+Number of trainable parameters:  34.37 (K)
+MACs(G):  1.62 (M)
+
+OPORM P=0.5 (1000):
+Total time: 576.96s, average inference time for 1batch: 574.3906ms
+Size: 7.55 MB
+Number of parameters:  1848.85 (K)
+Number of trainable parameters:  765.39 (K)
+MACs(G):  60.36 (M)
+
+
