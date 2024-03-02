@@ -82,7 +82,8 @@ def test_predict(model):
 
     avg_time = 0
     with torch.no_grad():
-        for i, data in enumerate(torch.rand(batches, 1, 1, image_size[0], image_size[1])): # shape: [amount_of_batches, batch_size, channels, height, width]
+        random_input = torch.rand(batches, 1, 1, image_size[0], image_size[1]) # shape: [amount_of_batches, batch_size, channels, height, width]
+        for i, data in enumerate(random_input): 
             print(i)
             start_avg = time.time()
 

@@ -7,8 +7,10 @@ from torch import nn, optim
 from compression.training import train_model
 
 def pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, writer=None, opnorm=True):
-	optimizer = optim.Adam(model_pruned.parameters(), lr=0.0001)
-	exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
+	lr = 0.003 if opnorm else 0.005
+	optimizer = optim.Adam(model_pruned.parameters(), lr=lr) # opnorm: 0.0001, L1: 0.0005
+	
+	exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs, eta_min=1e-5)
 	model_pruned.cuda()
 	if TENSORBOARD:
 		model_pruned = train_model(model_pruned, dataloaders, optimizer, exp_lr_scheduler, n_epochs, data, threshold, batch_size, True, TENSORBOARD, writer)
