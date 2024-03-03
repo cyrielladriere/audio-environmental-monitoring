@@ -8,8 +8,8 @@ from compression.training import train_model
 
 def pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, writer=None, opnorm=True):
 	lr = 0.003 if opnorm else 0.005
-	optimizer = optim.Adam(model_pruned.parameters(), lr=lr) # opnorm: 0.0001, L1: 0.0005
 	
+	optimizer = optim.Adam(model_pruned.parameters(), lr=lr) 
 	exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs, eta_min=1e-5)
 	model_pruned.cuda()
 	if TENSORBOARD:

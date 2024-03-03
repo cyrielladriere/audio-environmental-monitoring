@@ -14,9 +14,9 @@ from compression.models.PANN_pretrained import MobileNetV2
 from torchmetrics.classification import BinaryAccuracy, BinaryConfusionMatrix
 device = "cpu"
 # ------------- Testing Env
-MODEL_PANN = False
+MODEL_PANN = True
 PANN_QAT = False
-PANN_QAT_V2 = True      
+PANN_QAT_V2 = False      
 PANN_SQ = False         
 OPNORM_PRUNING = False; P=0.5
 # ------------- Variables
@@ -30,7 +30,7 @@ model_pann_sq = "resources/model_pann_sq.pt"
 model_pann_opnorm_pruning = "resources/model_pann_pruned_0.5.pt"
 # ------------- Hyperparameters
 image_size = (256, 128)
-batch_size = 1
+batch_size = 64
 threshold = 0.5
 
 def main():
@@ -41,7 +41,7 @@ def main():
     if not os.path.isfile(audio_data):
         convert_dataset(pd.read_csv(training_audio_labels), training_audio_data, audio_data) 
     data = load_pkl(audio_data)
-    print("ok")
+
     global labels_global
     labels_global = get_labels(data.keys())
     labels_global = convert_labels(labels_global)
@@ -50,7 +50,7 @@ def main():
     nr_instances = len(list(data.values()))
 
     dataloader = DataLoader(dataset, batch_size=batch_size)
-    print("start")
+
     if(MODEL_PANN):
         model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
         pretrained_weights = torch.load(model_pann)
@@ -118,10 +118,6 @@ def predict(model, dataloader):
     avg_time = 0
     with torch.no_grad():
         for i, data in enumerate(dataloader):
-            print(i)
-            # Edge inference
-            if batch_size == 1 and i > 10:
-                break
             start_avg = time.time()
             inputs, labels = data
             inputs = inputs.to(device) # Shape: [batch_size, channels, height, width]

@@ -69,8 +69,8 @@ def pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, th
     model.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
     torch.ao.quantization.prepare_qat(model, inplace=True)
     
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
+    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+    exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs, eta_min=1e-5)
     if TENSORBOARD:
         model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, data, threshold, batch_size, True, TENSORBOARD, writer)
         writer.flush()
