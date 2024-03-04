@@ -19,11 +19,13 @@ Number of parameters:  67.20 (K)
 Number of trainable parameters:  34.37 (K)
 MACs(G):  1.62 (M)
 
-OPORM P=0.5 (1000):
+OPNORM P=0.5 (1000):
 Total time: 576.96s, average inference time for 1batch: 574.3906ms
 Size: 7.55 MB
 Number of parameters:  1848.85 (K)
 Number of trainable parameters:  765.39 (K)
 MACs(G):  60.36 (M)
+
+L1_NORM P=0.5 (1000):
 
 

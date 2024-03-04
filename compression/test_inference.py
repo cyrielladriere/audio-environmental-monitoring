@@ -10,12 +10,14 @@ PANN_QAT = False
 PANN_QAT_V2 = False      
 PANN_SQ = False         
 OPNORM_PRUNING = True; P=0.5
+L1_PRUNING = False
 # ------------- Variables
 model_pann = "resources/model_pann.pt"
 model_pann_qat = "resources/model_pann_qat.pt"
 model_pann_qat_v2 = "resources/model_pann_qat_v2.pt"
 model_pann_sq = "resources/model_pann_sq.pt"
-model_pann_opnorm_pruning = "resources/model_pann_pruned_0.5.pt"
+model_pann_opnorm_pruning = "resources/model_opnorm_pruning_0.5_FT.pt"
+model_pann_l1_pruning = "resources/model_L1_norm_pruning_0.5_FT.pt"
 # ------------- Hyperparameters
 image_size = (256, 128)
 batches = 1000
@@ -70,6 +72,13 @@ def main():
     elif(OPNORM_PRUNING):
         model = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
         pretrained_weights = torch.load(model_pann_opnorm_pruning)
+
+        model.load_state_dict(pretrained_weights)
+        model.eval()
+        test_predict(model)
+    elif(L1_PRUNING):
+        model = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
+        pretrained_weights = torch.load(model_pann_l1_pruning)
 
         model.load_state_dict(pretrained_weights)
         model.eval()

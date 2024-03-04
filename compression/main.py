@@ -22,8 +22,8 @@ MODEL_PANN = False
 PANN_QAT = False
 PANN_QAT_V2 = False
 PANN_SQ = False         
-OPNORM_PRUNING = True; P=0.5
-L1_PRUNING = False
+OPNORM_PRUNING = False; P=0.5
+L1_PRUNING = True
 # ------------- Variables
 training_audio_data = "data/audio/train_curated"
 val_audio_data = "data/audio/test"
@@ -107,28 +107,27 @@ def main():
     elif(PANN_SQ):
         model_sq = pann_sq(model_pann_trained, dataloaders)
     elif(OPNORM_PRUNING):
-        for i in range(5):
-            today = datetime.now()
-            date = today.strftime('%b%d_%y-%H-%M')
-            model_dir = f"compression/runs/OPNORM_PRUNING/{date}"
-            if TENSORBOARD: writer = SummaryWriter(model_dir)
+        today = datetime.now()
+        date = today.strftime('%b%d_%y-%H-%M')
+        model_dir = f"compression/runs/OPNORM_PRUNING/{date}"
+        if TENSORBOARD: writer = SummaryWriter(model_dir)
 
-            model_pruned = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
-            model_original = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
-            pretrained_weights = torch.load(model_pann_trained)
-            model_original.load_state_dict(pretrained_weights)
+        model_pruned = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
+        model_original = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
+        pretrained_weights = torch.load(model_pann_trained)
+        model_original.load_state_dict(pretrained_weights)
 
-            print_model_size(model_original)
+        print_model_size(model_original)
 
-            save_pruned_layers()
-            model_pruned = import_pruned_weights(model_original, model_pruned, P)
-            
-            if TENSORBOARD:
-                torch.save(model_pruned.state_dict(), f"resources/model_pann_opnorm_{P}.pt")
-                pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, writer)
-            else:
-                pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD)
-            print_model_size(model_pruned)
+        save_pruned_layers()
+        model_pruned = import_pruned_weights(model_original, model_pruned, P)
+        
+        if TENSORBOARD:
+            torch.save(model_pruned.state_dict(), f"resources/model_pann_opnorm_{P}.pt")
+            pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, writer)
+        else:
+            pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD)
+        print_model_size(model_pruned)
 
     elif(L1_PRUNING):
         today = datetime.now()
