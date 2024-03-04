@@ -1,31 +1,47 @@
 Model_PANN (1000):
-Total time: 932.72s, average inference time for 1batch: 930.1545ms
+Total time: 1047.99s, average inference time for 1batch: 1045.2822ms
 Size: 14.85 MB
 Number of parameters:  3655.50 (K)
 Number of trainable parameters:  2572.05 (K)
 MACs(G):  193.01 (M)
+Average CPU Usage during Python script execution: 82.14843110504786 %
+Average Memory Usage during Python script execution: 548.8144611186904 MB
 
 QAT_v2 (1000):
-Total time: 1371.69s, average inference time for 1batch: 1369.2543ms
+Total time: 1471.97s, average inference time for 1batch: 1469.5202ms
 Size: 4.48 MB
 Number of parameters:  67.20 (K)
 Number of trainable parameters:  34.37 (K)
 MACs(G):  1.62 (M)
+Average CPU Usage during Python script execution: 81.53627730294401 %
+Average Memory Usage during Python script execution: 591.8983855650522 MB
 
 PANN_SQ (1000):
-Total time: 1298.50s, average inference time for 1batch: 1296.0763ms
+Total time: 1504.19s, average inference time for 1batch: 1501.7452ms
 Size: 4.48 MB
 Number of parameters:  67.20 (K)
 Number of trainable parameters:  34.37 (K)
 MACs(G):  1.62 (M)
+Average CPU Usage during Python script execution: 80.68463687150827 %
+Average Memory Usage during Python script execution: 610.6266294227188 MB
+
 
 OPNORM P=0.5 (1000):
-Total time: 576.96s, average inference time for 1batch: 574.3906ms
+Total time: 668.46s, average inference time for 1batch: 665.6179ms
 Size: 7.55 MB
 Number of parameters:  1848.85 (K)
 Number of trainable parameters:  765.39 (K)
 MACs(G):  60.36 (M)
+Average CPU Usage during Python script execution: 85.47212765957451 %
+Average Memory Usage during Python script execution: 589.4978723404255 MB
 
 L1_NORM P=0.5 (1000):
+Total time: 662.41s, average inference time for 1batch: 659.4688ms
+Size: 7.55 MB
+Number of parameters:  1848.85 (K)
+Number of trainable parameters:  765.39 (K)
+MACs(G):  60.36 (M)
+Average CPU Usage during Python script execution: 85.84325481798713 %
+Average Memory Usage during Python script execution: 612.1948608137045 MB
 
 

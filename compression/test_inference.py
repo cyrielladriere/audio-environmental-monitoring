@@ -7,10 +7,10 @@ device = "cpu"
 # ------------- Testing Env
 MODEL_PANN = False
 PANN_QAT = False
-PANN_QAT_V2 = False      
-PANN_SQ = False         
-OPNORM_PRUNING = True; P=0.5
-L1_PRUNING = False
+PANN_QAT_V2 = False
+PANN_SQ = False
+OPNORM_PRUNING = False; P=0.5
+L1_PRUNING = True
 # ------------- Variables
 model_pann = "resources/model_pann.pt"
 model_pann_qat = "resources/model_pann_qat.pt"
@@ -71,14 +71,15 @@ def main():
         test_predict(model)
     elif(OPNORM_PRUNING):
         model = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
-        pretrained_weights = torch.load(model_pann_opnorm_pruning)
+        model.to("cpu")
+        pretrained_weights = torch.load(model_pann_opnorm_pruning, map_location=torch.device('cpu'))
 
         model.load_state_dict(pretrained_weights)
         model.eval()
         test_predict(model)
     elif(L1_PRUNING):
         model = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
-        pretrained_weights = torch.load(model_pann_l1_pruning)
+        pretrained_weights = torch.load(model_pann_l1_pruning, map_location=torch.device('cpu'))
 
         model.load_state_dict(pretrained_weights)
         model.eval()
@@ -98,7 +99,7 @@ def test_predict(model):
 
             inputs = data.to(device)
 
-            if MODEL_PANN or PANN_QAT or PANN_QAT_V2 or OPNORM_PRUNING or PANN_SQ:
+            if MODEL_PANN or PANN_QAT or PANN_QAT_V2 or OPNORM_PRUNING or PANN_SQ or L1_PRUNING:
                 # Outputs: {"clipwise_output": [batch_size, num_classes], "Embedding": }
                 outputs = model(inputs)["clipwise_output"]
             else:
