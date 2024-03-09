@@ -109,7 +109,7 @@ def main():
     elif(OPNORM_PRUNING):
         today = datetime.now()
         date = today.strftime('%b%d_%y-%H-%M')
-        model_dir = f"compression/runs/OPNORM_PRUNING/{date}"
+        model_dir = f"compression/runs/OPNORM_PRUNING_{P}/{date}"
         if TENSORBOARD: writer = SummaryWriter(model_dir)
 
         model_pruned = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
@@ -132,7 +132,7 @@ def main():
     elif(L1_PRUNING):
         today = datetime.now()
         date = today.strftime('%b%d_%y-%H-%M')
-        model_dir = f"compression/runs/L1_PRUNING/{date}"
+        model_dir = f"compression/runs/L1_PRUNING_{P}/{date}"
         if TENSORBOARD: writer = SummaryWriter(model_dir)
 
         model_pruned = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
