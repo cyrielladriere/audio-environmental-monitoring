@@ -20,10 +20,10 @@ TENSORBOARD = True
 PREPROCESSING = False
 MODEL_PANN = False
 PANN_QAT = False
-PANN_QAT_V2 = False
+PANN_QAT_V2 = True; COMB = True
 PANN_SQ = False         
-OPNORM_PRUNING = False; P=0.5
-L1_PRUNING = True
+OPNORM_PRUNING = False; P=0.91
+L1_PRUNING = False
 # ------------- Variables
 training_audio_data = "data/audio/train_curated"
 val_audio_data = "data/audio/test"
@@ -33,6 +33,7 @@ training_data = "data/train_curated"
 val_data = "data/test"
 model_pann = "resources/MobileNetV2.pth"
 model_pann_trained = "resources/model_pann.pt"
+pruned_model_pann_trained = "resources/model_opnorm_pruning_0.81_FT.pt"
 model_at = "resources/mn10_as.pt"
 # ------------- Hyperparameters
 image_size = (256, 128)
@@ -103,53 +104,58 @@ def main():
     elif(PANN_QAT):          
         model_qat = pann_qat_v1(TENSORBOARD, model_pann, n_classes, dataloaders, n_epochs, data, threshold, batch_size) 
     elif(PANN_QAT_V2):
-        model_qat = pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size) 
+        for i in range(5):
+            if COMB:
+                model_qat = pann_qat_v2(TENSORBOARD, pruned_model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size, COMB) 
+            else:
+                model_qat = pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size) 
     elif(PANN_SQ):
         model_sq = pann_sq(model_pann_trained, dataloaders)
     elif(OPNORM_PRUNING):
-        today = datetime.now()
-        date = today.strftime('%b%d_%y-%H-%M')
-        model_dir = f"compression/runs/OPNORM_PRUNING_{P}/{date}"
-        if TENSORBOARD: writer = SummaryWriter(model_dir)
+        for i in range(5):
+            today = datetime.now()
+            date = today.strftime('%b%d_%y-%H-%M')
+            model_dir = f"compression/runs/OPNORM_PRUNING_{P}/{date}"
+            if TENSORBOARD: writer = SummaryWriter(model_dir)
 
-        model_pruned = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
-        model_original = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
-        pretrained_weights = torch.load(model_pann_trained)
-        model_original.load_state_dict(pretrained_weights)
+            model_pruned = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
+            model_original = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
+            pretrained_weights = torch.load(model_pann_trained)
+            model_original.load_state_dict(pretrained_weights)
 
-        print_model_size(model_original)
+            print_model_size(model_original)
 
-        save_pruned_layers()
-        model_pruned = import_pruned_weights(model_original, model_pruned, P)
-        
-        if TENSORBOARD:
-            torch.save(model_pruned.state_dict(), f"resources/model_pann_opnorm_{P}.pt")
-            pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, writer)
-        else:
-            pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD)
-        print_model_size(model_pruned)
+            save_pruned_layers()
+            model_pruned = import_pruned_weights(model_original, model_pruned, P)
+            
+            if TENSORBOARD:
+                pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, writer)
+            else:
+                pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD)
+            print_model_size(model_pruned)
 
     elif(L1_PRUNING):
-        today = datetime.now()
-        date = today.strftime('%b%d_%y-%H-%M')
-        model_dir = f"compression/runs/L1_PRUNING_{P}/{date}"
-        if TENSORBOARD: writer = SummaryWriter(model_dir)
+        for i in range(5):
+            today = datetime.now()
+            date = today.strftime('%b%d_%y-%H-%M')
+            model_dir = f"compression/runs/L1_PRUNING_{P}/{date}"
+            if TENSORBOARD: writer = SummaryWriter(model_dir)
 
-        model_pruned = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
-        model_original = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
-        pretrained_weights = torch.load(model_pann_trained)
-        model_original.load_state_dict(pretrained_weights)
+            model_pruned = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
+            model_original = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
+            pretrained_weights = torch.load(model_pann_trained)
+            model_original.load_state_dict(pretrained_weights)
 
-        print_model_size(model_original)
+            print_model_size(model_original)
 
-        save_pruned_layers(opnorm=False)
-        model_pruned = import_pruned_weights(model_original, model_pruned, P, opnorm=False)
-        
-        if TENSORBOARD:
-            pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, writer, opnorm=False)
-        else:
-            pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, opnorm=False)
-        print_model_size(model_pruned)
+            save_pruned_layers(opnorm=False)
+            model_pruned = import_pruned_weights(model_original, model_pruned, P, opnorm=False)
+            
+            if TENSORBOARD:
+                pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, writer, opnorm=False)
+            else:
+                pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, opnorm=False)
+            print_model_size(model_pruned)
 
 if __name__ == "__main__":
     main()

@@ -1,6 +1,7 @@
 # Fusing: https://github.com/Sanjana7395/static_quantization/blob/master/quantization%20pytorch.ipynb
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
+from compression.models.PANN_pruned import MobileNetV2_pruned
 from compression.training import train_model
 from compression.models.PANN_pretrained import MobileNetV2
 import torch
@@ -52,14 +53,21 @@ def pann_qat_v1(TENSORBOARD, model_pann, n_classes, dataloaders, n_epochs, data,
     print_model_size(model_qat)
     return model_qat
 
-def pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size):
+def pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size, COMB = False):
     # Tensorboard
     today = datetime.now()
     date = today.strftime('%b%d_%y-%H-%M')
-    model_dir = f"compression/runs/PANN_QAT_v2/{date}"
+    if COMB:
+        P = float(model_pann_trained.split("_")[-2])
+        model_dir = f"compression/runs/COMB_{P}/{date}"
+    else:
+        model_dir = f"compression/runs/PANN_QAT_v2/{date}"
     if TENSORBOARD: writer = SummaryWriter(model_dir)
 
-    model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, quantize=True, post_training=True).to(device)
+    if COMB:
+        model = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
+    else:
+        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, quantize=True, post_training=True).to(device)
     pretrained_weights = torch.load(model_pann_trained)
     model.load_state_dict(pretrained_weights)
 
@@ -79,7 +87,10 @@ def pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, th
         model.to("cpu") # Needed for quatization convert
         model_qat = torch.quantization.convert(model.eval(), inplace=False)
 
-        torch.save(model_qat.state_dict(), f"{model_dir}/model_pann_qat_v2.pt")
+        if COMB:
+            torch.save(model_qat.state_dict(), f"{model_dir}/comb_{P}.pt")
+        else:
+            torch.save(model_qat.state_dict(), f"{model_dir}/model_pann_qat_v2.pt")
     else:
         model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, data, threshold, batch_size, True, TENSORBOARD)
         model.to("cpu") # Needed for quatization convert
