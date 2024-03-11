@@ -23,6 +23,8 @@ def run_python_script(args):
             subprocess.run(["python3", "-m", "compression.test_inference", "--l1", "-p", str(args.p)])
         else:
             subprocess.run(["python3", "-m", "compression.test_inference", "--l1"])
+    elif(args.comb):
+        subprocess.run(["python3", "-m", "compression.test_inference", "--comb"])
 
     # End monitoring by terminating the bash script
     monitor_process.terminate()
@@ -57,6 +59,7 @@ def parser():
     parser.add_argument("--op", default=False, action="store_true", help="Enable OPNORM_PRUNING")
     parser.add_argument("-p", type=float, default=0.5, help="Value of P if pruning is enabled (default: 0.5)")
     parser.add_argument("--l1", default=False, action="store_true", help="Enable L1_PRUNING")
+    parser.add_argument("--comb", default=False, action="store_true", help="Enable COMBINATION")
 
     return parser.parse_args()
 

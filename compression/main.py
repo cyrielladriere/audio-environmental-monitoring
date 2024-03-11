@@ -33,7 +33,7 @@ training_data = "data/train_curated"
 val_data = "data/test"
 model_pann = "resources/MobileNetV2.pth"
 model_pann_trained = "resources/model_pann.pt"
-pruned_model_pann_trained = "resources/model_opnorm_pruning_0.81_FT.pt"
+pruned_model_pann_trained = "resources/model_opnorm_pruning_0.81_FT.pt" # COMB
 model_at = "resources/mn10_as.pt"
 # ------------- Hyperparameters
 image_size = (256, 128)

@@ -3,6 +3,8 @@ from torch import nn
 from torchlibrosa.stft import Spectrogram, LogmelFilterBank
 from torchlibrosa.augmentation import SpecAugmentation
 import torch.nn.functional as F
+from torch.nn.quantized import FloatFunctional
+from torch.ao.quantization import DeQuantStub, QuantStub
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def init_layer(layer):
@@ -20,10 +22,14 @@ def init_bn(bn):
     bn.weight.data.fill_(1.)
 
 class InvertedResidual(nn.Module):
-    def __init__(self, inp, oup, stride, expand_ratio, P):
+    def __init__(self, inp, oup, stride, expand_ratio, P, quantize=False):
         super(InvertedResidual, self).__init__()
         self.stride = stride
         assert stride in [1, 2]
+
+        self.quantize=quantize
+        if(self.quantize):
+            self.ff = FloatFunctional()
 
         hidden_dim = round(inp * expand_ratio)
         filters = int(hidden_dim*(1-P))
@@ -67,17 +73,26 @@ class InvertedResidual(nn.Module):
 
     def forward(self, x):
         if self.use_res_connect:
-            return x + self.conv(x)
+            if self.quantize:
+                return self.ff.add(x, self.conv(x))
+            else:
+                return x + self.conv(x)
         else:
             return self.conv(x)
 
 class MobileNetV2_pruned(nn.Module):
     def __init__(self, P, sample_rate, window_size, hop_size, mel_bins, fmin, 
-        fmax, classes_num):
+        fmax, classes_num, quantize=False):
         
         super(MobileNetV2_pruned, self).__init__()
         
         self.P = P
+        self.quantize = quantize
+
+        if self.quantize:
+            self.quant = QuantStub()
+            self.dequant = DeQuantStub()
+            self.ff = FloatFunctional()
 
         window = 'hann'
         center = True
@@ -150,9 +165,9 @@ class MobileNetV2_pruned(nn.Module):
             output_channel = int(c * width_mult)
             for i in range(n):
                 if i == 0:
-                    self.features.append(block(input_channel, int(output_channel*(1-self.P)), s, expand_ratio=t, P=self.P))
+                    self.features.append(block(input_channel, int(output_channel*(1-self.P)), s, expand_ratio=t, P=self.P, quantize=self.quantize))
                 else:
-                    self.features.append(block(input_channel, int(output_channel*(1-self.P)), 1, expand_ratio=t, P=self.P))
+                    self.features.append(block(input_channel, int(output_channel*(1-self.P)), 1, expand_ratio=t, P=self.P, quantize=self.quantize))
                 input_channel = output_channel
         # building last several layers
         self.features.append(conv_1x1_bn(input_channel, self.last_channel))
@@ -176,6 +191,9 @@ class MobileNetV2_pruned(nn.Module):
         # x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
         # x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
 
+        if self.quantize:
+            input = self.quant(input)
+
         x = input.transpose(1, 3)
         x = self.bn0(x)
         x = x.transpose(1, 3)
@@ -193,12 +211,16 @@ class MobileNetV2_pruned(nn.Module):
         
         (x1, _) = torch.max(x, dim=2)
         x2 = torch.mean(x, dim=2)
-        x = x1 + x2
+        if self.quantize:
+            x = self.ff.add(x1, x2)
         # x = F.dropout(x, p=0.5, training=self.training)
         x = F.relu_(self.fc1(x))
         embedding = F.dropout(x, p=0.5, training=self.training)
 
         clipwise_output = self.fc_audioset(x)
+
+        if self.quantize:
+            clipwise_output = self.dequant(clipwise_output)
         
         output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
 

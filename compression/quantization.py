@@ -65,7 +65,7 @@ def pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, th
     if TENSORBOARD: writer = SummaryWriter(model_dir)
 
     if COMB:
-        model = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
+        model = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80, quantize=True)
     else:
         model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, quantize=True, post_training=True).to(device)
     pretrained_weights = torch.load(model_pann_trained)

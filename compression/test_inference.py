@@ -10,6 +10,7 @@ model_pann = "resources/model_pann.pt"
 model_pann_qat = "resources/model_pann_qat.pt"
 model_pann_qat_v2 = "resources/model_pann_qat_v2.pt"
 model_pann_sq = "resources/model_pann_sq.pt"
+model_comb = "resources/comb_0.81.pt"
 # ------------- Hyperparameters
 image_size = (256, 128)
 batches = 1000
@@ -79,6 +80,19 @@ def main(args):
         model.load_state_dict(pretrained_weights)
         model.eval()
         test_predict(model)
+    elif(args.comb):
+        P = 0.81
+        model = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80, quantize=True)
+        model.to("cpu")
+        pretrained_weights = torch.load(model_comb)
+
+        model.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
+        torch.ao.quantization.prepare_qat(model, inplace=True)
+        model = torch.quantization.convert(model.eval(), inplace=True)
+
+        model.load_state_dict(pretrained_weights)
+        model.eval()
+        test_predict(model)
 
     print_model_size(model, macs=True)
 
@@ -113,6 +127,7 @@ def parser():
     parser.add_argument("--op", default=False, action="store_true", help="Enable OPNORM_PRUNING")
     parser.add_argument("-p", type=float, default=0.5, help="Value of P if pruning is enabled (default: 0.5)")
     parser.add_argument("--l1", default=False, action="store_true", help="Enable L1_PRUNING")
+    parser.add_argument("--comb", default=False, action="store_true", help="Enable COMBINATION")
 
     return parser.parse_args()
     
