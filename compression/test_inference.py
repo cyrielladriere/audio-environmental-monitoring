@@ -107,11 +107,11 @@ def test_predict(model):
             start_avg = time.time()
 
             inputs = data.to(device)
-
+            print("ok")
             outputs = model(inputs)["clipwise_output"]
-
+            print(i)
             outputs = torch.sigmoid(outputs)
-
+            print("nieje")
             end_avg = time.time()
             avg_time += end_avg-start_avg
 
