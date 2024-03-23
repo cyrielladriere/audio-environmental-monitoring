@@ -2,6 +2,9 @@ import argparse
 import subprocess
 import time
 
+import warnings
+warnings.filterwarnings("ignore")
+
 def run_python_script(args):
     # Start monitoring CPU and memory usage
     monitor_process = subprocess.Popen(["./compression/scripts/monitor_usage.sh"], stdout=subprocess.PIPE)

@@ -4,6 +4,8 @@ from compression.models.PANN_pretrained import MobileNetV2
 from compression.models.PANN_pruned import MobileNetV2_pruned
 import torch
 import time
+import warnings
+warnings.filterwarnings("ignore")
 device = "cpu"
 # ------------- Variables
 model_pann = "resources/model_pann.pt"
