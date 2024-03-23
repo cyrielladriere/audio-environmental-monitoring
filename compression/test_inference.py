@@ -103,7 +103,6 @@ def test_predict(model):
     with torch.no_grad():
         random_input = torch.rand(batches, 1, 1, image_size[0], image_size[1]) # shape: [amount_of_batches, batch_size, channels, height, width]
         for i, data in enumerate(random_input): 
-            print(i)
             start_avg = time.time()
 
             inputs = data.to(device)
