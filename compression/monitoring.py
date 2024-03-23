@@ -40,7 +40,7 @@ def run_python_script(args):
     output = monitor_process.communicate()[0].decode('utf-8')
 
     # Extract average CPU and memory usage from the output
-    lines = output.split('\n')[60:-30]
+    lines = output.split('\n')[30:-30]
     total_cpu = 0
     total_mem = 0
     total_cpu_temp = 0
