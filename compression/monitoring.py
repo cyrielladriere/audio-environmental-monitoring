@@ -6,24 +6,31 @@ def run_python_script(args):
     monitor_process = subprocess.Popen(["./compression/scripts/monitor_usage.sh"], stdout=subprocess.PIPE)
 
     if args.base:
+        print("Model_PANN (1000):")
         subprocess.run(["python3", "-m", "compression.test_inference", "--base"])
     elif(args.qat):
+        print("PANN_QAT (1000):")
         subprocess.run(["python3", "-m", "compression.test_inference", "--qat"])
     elif(args.qat2):
+        print("PANN_QATv2 (1000):")
         subprocess.run(["python3", "-m", "compression.test_inference", "--qat2"])
     elif(args.sq):
+        print("PANN_SQ (1000):")
         subprocess.run(["python3", "-m", "compression.test_inference", "--sq"])
     elif(args.op):
+        print(f"OPNORM_{args.p} (1000):")
         if args.p != 0.5:
             subprocess.run(["python3", "-m", "compression.test_inference", "--op", "-p", str(args.p)])
         else:
             subprocess.run(["python3", "-m", "compression.test_inference", "--op"])
     elif(args.l1):
+        print(f"L1_{args.p} (1000):")
         if args.p != 0.5:
             subprocess.run(["python3", "-m", "compression.test_inference", "--l1", "-p", str(args.p)])
         else:
             subprocess.run(["python3", "-m", "compression.test_inference", "--l1"])
     elif(args.comb):
+        print("COMB (1000):")
         subprocess.run(["python3", "-m", "compression.test_inference", "--comb"])
 
     # End monitoring by terminating the bash script
@@ -39,13 +46,16 @@ def run_python_script(args):
     total_cpu_temp = 0
     count = 0
     for line in lines:
-        if line.startswith("CPU Usage:"):
-            total_cpu += float(line.split(':')[1].strip()[:-1])
-            count += 1
-        elif line.startswith("Memory Usage:"):
-            total_mem += float(line.split(':')[1].strip()[:-3])
-        elif line.startswith("CPU Temperature:"):
-            total_cpu_temp += float(line.split(':')[1].strip()[:-3])
+        try:
+            if line.startswith("CPU Usage:"):
+                total_cpu += float(line.split(':')[1].strip()[:-1])
+                count += 1
+            elif line.startswith("Memory Usage:"):
+                total_mem += float(line.split(':')[1].strip()[:-3])
+            elif line.startswith("CPU Temperature:"):
+                total_cpu_temp += float(line.split(':')[1].strip()[:-3])
+        except ValueError:
+            print(line)
     
     average_cpu = total_cpu / count
     average_mem = total_mem / count
@@ -67,6 +77,7 @@ def parser():
     parser.add_argument("-p", type=float, default=0.5, help="Value of P if pruning is enabled (default: 0.5)")
     parser.add_argument("--l1", default=False, action="store_true", help="Enable L1_PRUNING")
     parser.add_argument("--comb", default=False, action="store_true", help="Enable COMBINATION")
+    parser.add_argument("--all", default=False, action="store_true", help="Enable ALL models")
 
     return parser.parse_args()
 
