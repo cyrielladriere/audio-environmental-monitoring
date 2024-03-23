@@ -94,7 +94,7 @@ def run_all_help(model, command):
     # Start monitoring CPU and memory usage
     monitor_process = subprocess.Popen(["./compression/scripts/monitor_usage.sh"], stdout=subprocess.PIPE)
 
-    print(model, command)
+    print(model)
     subprocess.run(command)
 
     # End monitoring by terminating the bash script
