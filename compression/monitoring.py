@@ -36,6 +36,7 @@ def run_python_script(args):
     lines = output.split('\n')[60:-30]
     total_cpu = 0
     total_mem = 0
+    total_cpu_temp = 0
     count = 0
     for line in lines:
         if line.startswith("CPU Usage:"):
@@ -43,12 +44,18 @@ def run_python_script(args):
             count += 1
         elif line.startswith("Memory Usage:"):
             total_mem += float(line.split(':')[1].strip()[:-3])
+        elif line.startswith("CPU Temperature:"):
+            total_cpu_temp += float(line.split(':')[1].strip()[:-3])
     
     average_cpu = total_cpu / count
     average_mem = total_mem / count
+    average_cpu_temp = total_cpu_temp / count
+    total_cpu_units = total_cpu
 
+    print("Total CPU Usage during Python script execution:", total_cpu)
     print("Average CPU Usage during Python script execution:", average_cpu, "%")
     print("Average Memory Usage during Python script execution:", average_mem, "MB")
+    print("Average CPU Temperature during Python script execution:", average_cpu_temp, "°C")
 
 def parser():
     parser = argparse.ArgumentParser(description="Argument parser for the provided variables")
