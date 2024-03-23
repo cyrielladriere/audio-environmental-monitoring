@@ -1,0 +1,25 @@
+Model_PANN (1000):
+Total time: 226.08s, average inference time for 1batch: 225.5750ms
+Size: 14.85 MB
+Number of parameters:  3655.50 (K)
+Number of trainable parameters:  2572.05 (K)
+MACs(G):  193.01 (M)
+Total CPU Usage during Python script execution: 12296.900000000001
+Average CPU Usage during Python script execution: 77.33899371069184 %
+Average Memory Usage during Python script execution: 731.6037735849056 MB
+Average CPU Temperature during Python script execution: 65.55534591194979 °C
+
+QAT_v2 (1000):
+
+
+PANN_SQ (1000):
+
+
+
+OPNORM P=0.5 (1000):
+
+
+L1_NORM P=0.5 (1000):
+
+
+
