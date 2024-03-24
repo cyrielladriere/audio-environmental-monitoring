@@ -18,7 +18,7 @@ image_size = (256, 128)
 batches = 1000
 
 def main(args):
-    P = args.p
+    P = float(args.p)
     if(args.base):
         model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
         model.to("cpu")

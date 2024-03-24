@@ -213,6 +213,8 @@ class MobileNetV2_pruned(nn.Module):
         x2 = torch.mean(x, dim=2)
         if self.quantize:
             x = self.ff.add(x1, x2)
+        else:
+            x = x1 + x2
         # x = F.dropout(x, p=0.5, training=self.training)
         x = F.relu_(self.fc1(x))
         embedding = F.dropout(x, p=0.5, training=self.training)
