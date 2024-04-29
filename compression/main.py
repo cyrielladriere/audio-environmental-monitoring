@@ -20,8 +20,8 @@ TENSORBOARD = True
 PREPROCESSING = False
 MODEL_PANN = False
 PANN_QAT = False
-PANN_QAT_V2 = True; COMB = True
-PANN_SQ = False         
+PANN_QAT_V2 = False; COMB = False
+PANN_SQ = True         
 OPNORM_PRUNING = False; P=0.91
 L1_PRUNING = False
 # ------------- Variables

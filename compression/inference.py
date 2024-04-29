@@ -1,4 +1,5 @@
 import pandas as pd
+from sklearn.model_selection import train_test_split
 from compression.evaluation import calculate_per_class_lwlrap, print_model_size
 from compression.models.PANN_pruned import MobileNetV2_pruned
 from compression.preprocessing import convert_dataset, load_pkl, get_labels, convert_labels
@@ -14,11 +15,12 @@ from compression.models.PANN_pretrained import MobileNetV2
 from torchmetrics.classification import BinaryAccuracy, BinaryConfusionMatrix
 device = "cpu"
 # ------------- Testing Env
-MODEL_PANN = True
+MODEL_PANN = False
 PANN_QAT = False
 PANN_QAT_V2 = False      
 PANN_SQ = False         
-OPNORM_PRUNING = False; P=0.5
+OPNORM_PRUNING = True; P=0.91
+L1_PRUNING = False
 # ------------- Variables
 training_audio_labels = "data/audio/train_curated.csv"
 training_audio_data = "data/audio/train_curated"
@@ -27,7 +29,8 @@ model_pann = "resources/model_pann.pt"
 model_pann_qat = "resources/model_pann_qat.pt"
 model_pann_qat_v2 = "resources/model_pann_qat_v2.pt"
 model_pann_sq = "resources/model_pann_sq.pt"
-model_pann_opnorm_pruning = "resources/model_pann_pruned_0.5.pt"
+model_pann_opnorm_pruning = f"resources/model_opnorm_pruning_{P}_FT.pt"
+model_pann_l1_pruning = f"resources/model_L1_norm_pruning_{P}_FT.pt"
 # ------------- Hyperparameters
 image_size = (256, 128)
 batch_size = 64
@@ -45,9 +48,17 @@ def main():
     global labels_global
     labels_global = get_labels(data.keys())
     labels_global = convert_labels(labels_global)
-    dataset = TrainDataset(list(data.values()), labels_global, transform)
+    
+    data_ = train_test_split(list(data.values()), labels_global, test_size=0.2, random_state=10)    # Random state makes sure we get same splits everytime (on same dataset)
+    x_trn, x_val, y_trn, y_val = data_
+
+    labels_global = y_val
+
+    # Only validation set
+    dataset = TrainDataset(x_val, y_val, transform)
+
     global nr_instances
-    nr_instances = len(list(data.values()))
+    nr_instances = len(x_val)
 
     dataloader = DataLoader(dataset, batch_size=batch_size)
 
@@ -102,6 +113,14 @@ def main():
         model.load_state_dict(pretrained_weights)
         model.eval()
         predict(model, dataloader)
+    
+    elif(L1_PRUNING):
+        model = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
+        pretrained_weights = torch.load(model_pann_l1_pruning)
+
+        model.load_state_dict(pretrained_weights)
+        model.eval()
+        predict(model, dataloader)
 
     print_model_size(model, macs=True)
 
@@ -126,7 +145,7 @@ def predict(model, dataloader):
             bcm = BinaryConfusionMatrix(threshold=threshold).to(device)
             
             
-            if MODEL_PANN or PANN_QAT or PANN_QAT_V2 or OPNORM_PRUNING or PANN_SQ:
+            if MODEL_PANN or PANN_QAT or PANN_QAT_V2 or OPNORM_PRUNING or PANN_SQ or L1_PRUNING:
                 # Outputs: {"clipwise_output": [batch_size, num_classes], "Embedding": }
                 outputs = model(inputs)["clipwise_output"]
             else:
@@ -152,6 +171,9 @@ def predict(model, dataloader):
         score, weight = calculate_per_class_lwlrap(labels_global, preds)
         lwlrap = (score * weight).sum()
         end = time.time()
+        for x in score:
+            print(f"{x},", end="")
+        print("\n-----------------------------------")
         print(f'lwlrap: {lwlrap:.4f} Precision: {precision:.4f} Recall: {recall:.4f} F1: {F1:.4f} TN: {TN} FP: {FP} FN: {FN} TP: {TP}')
         print(f"Total time: {end-start:.2f}s, average inference time for 1batch: {(avg_time/nr_instances)*1000:.4f}ms")
 
