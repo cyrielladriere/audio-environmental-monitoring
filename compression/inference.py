@@ -1,7 +1,7 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from compression.evaluation import calculate_per_class_lwlrap, print_model_size
-from compression.models.PANN_pruned import MobileNetV2_pruned
+from compression.models.PANN_pruned import Cnn14_pruned, MobileNetV2_pruned
 from compression.preprocessing import convert_dataset, load_pkl, get_labels, convert_labels
 from torchvision import transforms, datasets
 from compression.main import TrainDataset
@@ -11,26 +11,26 @@ import torch
 import os
 import numpy as np
 import time
-from compression.models.PANN_pretrained import MobileNetV2
+from compression.models.PANN_pretrained import Cnn14, MobileNetV2
 from torchmetrics.classification import BinaryAccuracy, BinaryConfusionMatrix
 device = "cpu"
 # ------------- Testing Env
 MODEL_PANN = False
 PANN_QAT = False
 PANN_QAT_V2 = False      
-PANN_SQ = False         
-OPNORM_PRUNING = True; P=0.91
+PANN_SQ = True         
+OPNORM_PRUNING = False; P=0.91
 L1_PRUNING = False
 # ------------- Variables
 training_audio_labels = "data/audio/train_curated.csv"
 training_audio_data = "data/audio/train_curated"
 audio_data = "data/train_curated"
-model_pann = "resources/model_pann.pt"
-model_pann_qat = "resources/model_pann_qat.pt"
-model_pann_qat_v2 = "resources/model_pann_qat_v2.pt"
-model_pann_sq = "resources/model_pann_sq.pt"
-model_pann_opnorm_pruning = f"resources/model_opnorm_pruning_{P}_FT.pt"
-model_pann_l1_pruning = f"resources/model_L1_norm_pruning_{P}_FT.pt"
+model_pann = "resources/cnn_14/model_pann_cnn_14.pt"
+model_pann_qat = "resources/cnn_14/model_pann_qat.pt"
+model_pann_qat_v2 = "resources/cnn_14/model_pann_qat_v2.pt"
+model_pann_sq = "resources/cnn_14/model_pann_cnn_14_sq.pt"
+model_pann_opnorm_pruning = f"resources/cnn_14/model_opnorm_pruning_{P}_FT.pt"
+model_pann_l1_pruning = f"resources/cnn_14/model_L1_norm_pruning_{P}_FT.pt"
 # ------------- Hyperparameters
 image_size = (256, 128)
 batch_size = 64
@@ -63,14 +63,14 @@ def main():
     dataloader = DataLoader(dataset, batch_size=batch_size)
 
     if(MODEL_PANN):
-        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
+        model = Cnn14(44100, 512, 320, 64, 50, 14000, 80, post_training=True).to(device)
         pretrained_weights = torch.load(model_pann)
         model.load_state_dict(pretrained_weights)
         # model.cuda()
         model.eval()
         predict(model, dataloader)
     elif(PANN_QAT):
-        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True, quantize=True)
+        model = Cnn14(44100, 512, 320, 64, 50, 14000, 80, post_training=True, quantize=True)
         model.to("cpu")
         pretrained_weights = torch.load(model_pann_qat)
 
@@ -82,7 +82,7 @@ def main():
         model.eval()
         predict(model, dataloader)
     elif(PANN_QAT_V2):
-        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True, quantize=True)
+        model = Cnn14(44100, 512, 320, 64, 50, 14000, 80, post_training=True, quantize=True)
         model.to("cpu")
         pretrained_weights = torch.load(model_pann_qat_v2)
 
@@ -95,7 +95,7 @@ def main():
         predict(model, dataloader)
 
     elif(PANN_SQ):
-        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, quantize=True, post_training=True)
+        model = Cnn14(44100, 512, 320, 64, 50, 14000, 80, quantize=True, post_training=True)
         pretrained_weights = torch.load(model_pann_sq)
 
         model.qconfig = torch.ao.quantization.get_default_qconfig('x86')
@@ -107,7 +107,7 @@ def main():
         model.eval()
         predict(model, dataloader)
     elif(OPNORM_PRUNING):
-        model = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
+        model = Cnn14_pruned(P, 44100, 512, 320, 64, 50, 14000, 80)
         pretrained_weights = torch.load(model_pann_opnorm_pruning)
 
         model.load_state_dict(pretrained_weights)
@@ -115,7 +115,7 @@ def main():
         predict(model, dataloader)
     
     elif(L1_PRUNING):
-        model = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
+        model = Cnn14_pruned(P, 44100, 512, 320, 64, 50, 14000, 80)
         pretrained_weights = torch.load(model_pann_l1_pruning)
 
         model.load_state_dict(pretrained_weights)
@@ -171,8 +171,8 @@ def predict(model, dataloader):
         score, weight = calculate_per_class_lwlrap(labels_global, preds)
         lwlrap = (score * weight).sum()
         end = time.time()
-        for x in score:
-            print(f"{x},", end="")
+        # for x in score:
+        #     print(f"{x},", end="")
         print("\n-----------------------------------")
         print(f'lwlrap: {lwlrap:.4f} Precision: {precision:.4f} Recall: {recall:.4f} F1: {F1:.4f} TN: {TN} FP: {FP} FN: {FN} TP: {TP}')
         print(f"Total time: {end-start:.2f}s, average inference time for 1batch: {(avg_time/nr_instances)*1000:.4f}ms")

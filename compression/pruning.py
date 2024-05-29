@@ -22,7 +22,17 @@ def pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, 
 	else:
 		model_pruned = train_model(model_pruned, dataloaders, optimizer, exp_lr_scheduler, n_epochs, data, threshold, batch_size, True, TENSORBOARD)
 
-def import_pruned_weights(model_original, model_pruned, P, opnorm=True):
+def import_pruned_weights(model_original, model_pruned, P, opnorm=True, cnn_14=False):
+
+	if not cnn_14:
+		max_layers = 51
+		start_layer = 5
+		end_layer = 161
+	else:
+		max_layers = 11
+		start_layer = 5
+		end_layer = 41
+
 	with torch.no_grad():
 		k = 0
 		prev_pruned_weights = None  # in_channel
@@ -41,14 +51,14 @@ def import_pruned_weights(model_original, model_pruned, P, opnorm=True):
 				model_copy_pruned = current_layer_pruned
 				model_copy_original = current_layer_original
 			
-			if k <= 51: # just for the last batchnorm/activation layer so we dont get file doesnt exist error (todo better fix)
+			if k <= max_layers: # just for the last batchnorm/activation layer so we dont get file doesnt exist error (todo better fix)
 				if opnorm:
-					pruned_weights = np.load(f"compression/pruning_scores/opnorm/opnorm_pruning_layer_{k}.npy")
+					pruned_weights = np.load(f"compression/pruning_scores/cnn_14/opnorm/opnorm_pruning_layer_{k}.npy")
 				else:
-					pruned_weights = np.load(f"compression/pruning_scores/L1_norm/L1_norm_pruning_layer_{k}.npy")
+					pruned_weights = np.load(f"compression/pruning_scores/cnn_14/L1_norm/L1_norm_pruning_layer_{k}.npy")
 				pruned_weights = sorted(pruned_weights[int(np.ceil(len(pruned_weights)*P)):])   # out_channel
 
-			if i >= 5 and i < 161: # until last non-fully connected node
+			if i >= start_layer and i < end_layer: # until last non-fully connected node
 				# print(f"{layer}, {i} -----------------------------")
 				W = current_layer_original.state_dict()
 				for key in W.keys():
@@ -69,8 +79,8 @@ def import_pruned_weights(model_original, model_pruned, P, opnorm=True):
 				# Randomly initialize fully connected layers
 		return model_pruned
 
-def save_pruned_layers(opnorm=True):
-	model_pann_trained = "resources/model_pann.pt"
+def save_pruned_layers(opnorm=True, cnn_14=False):
+	model_pann_trained = "resources/cnn_14/model_pann_cnn_14.pt"
 
 	# load weights from the unpruned network (we have used numpy format to save  and load the pre-trained weights)
 
@@ -79,7 +89,11 @@ def save_pruned_layers(opnorm=True):
 	W_init = [tensor.cpu().numpy() for tensor in W_init.values()]  # only need the weights, no need for keys because we have the indexes 
 
 	# Obtaining layer-wise importance scores of CNN filters
-	indexes = [8, 14, 20, 26, 32, 38, 44, 50, 56, 62, 68, 74, 80, 86, 92, 98, 104, 110, 116, 122, 128, 134, 140, 146, 152, 158, 164, 170, 176, 182, 188, 194, 200, 206, 212, 218, 224, 230, 236, 242, 248, 254, 260, 266, 272, 278, 284, 290, 296, 302, 308, 314]# indexes=[0,6,12,18,24,30,36,42,48,54,60,66,72] # indexes of convolution layers in W_init for VGG-16
+	if not cnn_14:
+		indexes = [8, 14, 20, 26, 32, 38, 44, 50, 56, 62, 68, 74, 80, 86, 92, 98, 104, 110, 116, 122, 128, 134, 140, 146, 152, 158, 164, 170, 176, 182, 188, 194, 200, 206, 212, 218, 224, 230, 236, 242, 248, 254, 260, 266, 272, 278, 284, 290, 296, 302, 308, 314]# indexes=[0,6,12,18,24,30,36,42,48,54,60,66,72] # indexes of convolution layers in W_init for VGG-16
+	else:
+		indexes = [8, 9, 20, 21, 32, 33, 44, 45, 56, 57, 68, 69]
+
 	# L=[1,2,3,4,5,6,7,8,9,10,11,12,13]  # convolutional layer number (for VGG-16, it is from 1 to 13)
 
 
@@ -93,11 +107,11 @@ def save_pruned_layers(opnorm=True):
 		if opnorm:
 			score_norm_m1 = operator_norm_pruning(W)
 			file_name = 'opnorm_pruning_layer_'+str(i)+'.npy'
-			np.save(f"compression/pruning_scores/opnorm/{file_name}",np.argsort(score_norm_m1)) # save sorted arguments from low to high importance.
+			np.save(f"compression/pruning_scores/cnn_14/opnorm/{file_name}",np.argsort(score_norm_m1)) # save sorted arguments from low to high importance.
 		else:
 			score_L1= L1_Imp_index(W)  #l_1 entry wise norm based important scores
 			file_name = 'L1_norm_pruning_layer_'+str(i)+'.npy'
-			np.save(f"compression/pruning_scores/L1_norm/{file_name}",np.argsort(score_L1)) # save sorted arguments from low to high importance.
+			np.save(f"compression/pruning_scores/cnn_14/L1_norm/{file_name}",np.argsort(score_L1)) # save sorted arguments from low to high importance.
 
 		# print(np.argsort(score_norm_m1))
 		# Score_GM=CVPR_GM_Imp_index(W)  #Geomettric median based important scores

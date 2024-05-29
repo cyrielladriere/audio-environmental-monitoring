@@ -7,8 +7,8 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from compression.evaluation import print_model_size
-from compression.models.PANN_pretrained import MobileNetV2
-from compression.models.PANN_pruned import MobileNetV2_pruned
+from compression.models.PANN_pretrained import Cnn14, MobileNetV2
+from compression.models.PANN_pruned import Cnn14_pruned, MobileNetV2_pruned
 from compression.preprocessing import TrainDataset, convert_dataset, load_pkl, get_labels, convert_labels
 from compression.pruning import import_pruned_weights, pruned_fine_tuning, save_pruned_layers
 from compression.quantization import pann_qat_v1, pann_qat_v2, pann_sq
@@ -20,9 +20,9 @@ TENSORBOARD = True
 PREPROCESSING = False
 MODEL_PANN = False
 PANN_QAT = False
-PANN_QAT_V2 = False; COMB = False
-PANN_SQ = True         
-OPNORM_PRUNING = False; P=0.91
+PANN_QAT_V2 = True; COMB = True
+PANN_SQ = False         
+OPNORM_PRUNING = False; P=0.50
 L1_PRUNING = False
 # ------------- Variables
 training_audio_data = "data/audio/train_curated"
@@ -31,9 +31,9 @@ training_audio_labels = "data/audio/train_curated.csv"
 test_audio_labels = "data/audio/sample_submission.csv"
 training_data = "data/train_curated"
 val_data = "data/test"
-model_pann = "resources/MobileNetV2.pth"
-model_pann_trained = "resources/model_pann.pt"
-pruned_model_pann_trained = "resources/model_opnorm_pruning_0.81_FT.pt" # COMB
+model_pann = "resources/cnn_14/cnn_14.pth"
+model_pann_trained = "resources/cnn_14/model_pann_cnn_14.pt"
+pruned_model_pann_trained = "resources/cnn14/model_opnorm_pruning_0.81_FT.pt" # COMB
 model_at = "resources/mn10_as.pt"
 # ------------- Hyperparameters
 image_size = (256, 128)
@@ -70,63 +70,65 @@ def main():
     dataloaders = {"train": train_dataloader, "val": val_dataloader}
 
     if(MODEL_PANN):
-        for i in range(5):
-            # Tensorboard
-            today = datetime.now()
-            date = today.strftime('%b%d_%y-%H-%M')
-            model_dir = f"compression/runs/PANN/{date}"
-            if TENSORBOARD: writer = SummaryWriter(model_dir)
+        # for i in range(5):
+        # Tensorboard
+        today = datetime.now()
+        date = today.strftime('%b%d_%y-%H-%M')
+        model_dir = f"compression/runs/CNN_14/PANN/{date}"
+        if TENSORBOARD: writer = SummaryWriter(model_dir)
 
-            model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 527).to(device)
-            pretrained_weights = torch.load(model_pann)["model"] # keys: {iteration: , model: }
-            model.load_state_dict(pretrained_weights)
+        model = Cnn14(44100, 512, 320, 64, 50, 14000, 527).to(device)
+        pretrained_weights = torch.load(model_pann)["model"] # keys: {iteration: , model: }
+        model.load_state_dict(pretrained_weights)
 
-            print_model_size(model)
+        print_model_size(model)
 
-            # Initialize layers that are not frozen
-            model.bn0 = nn.BatchNorm2d(128)
-            model.fc1 = nn.Linear(in_features=1280, out_features=256, bias=True)    # out_features tested: 1024(pretty bad), 512(ok), 128(okok)
-            model.fc_audioset = nn.Linear(256, n_classes, bias=True)
-            
-        
-            optimizer = optim.Adam(model.parameters(), lr=0.001)
-            exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50, eta_min=1e-5)
-            model.cuda()
-            if TENSORBOARD:
-                model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, data, threshold, batch_size, True, TENSORBOARD, writer)
-                writer.flush()
-                writer.close()
+        # Initialize layers that are not frozen
+        model.bn0 = nn.BatchNorm2d(128)
+        model.fc1 = nn.Linear(in_features=2048, out_features=256, bias=True)    # out_features tested: 1024(pretty bad), 512(ok), 128(okok)
+        model.fc_audioset = nn.Linear(256, n_classes, bias=True)
+    
+        optimizer = optim.Adam(model.parameters(), lr=0.001)
+        exp_lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50, eta_min=1e-5)
+        model.cuda()
+        if TENSORBOARD:
+            model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, data, threshold, batch_size, True, TENSORBOARD, writer)
+            writer.flush()
+            writer.close()
 
-                torch.save(model.state_dict(), f"{model_dir}/model_pann.pt")
-            else:
-                model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, data, threshold, batch_size, True, TENSORBOARD)
+            torch.save(model.state_dict(), f"{model_dir}/model_pann.pt")
+        else:
+            model = train_model(model, dataloaders, optimizer, exp_lr_scheduler, n_epochs, data, threshold, batch_size, True, TENSORBOARD)
 
     elif(PANN_QAT):          
         model_qat = pann_qat_v1(TENSORBOARD, model_pann, n_classes, dataloaders, n_epochs, data, threshold, batch_size) 
     elif(PANN_QAT_V2):
-        for i in range(5):
-            if COMB:
-                model_qat = pann_qat_v2(TENSORBOARD, pruned_model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size, COMB) 
-            else:
-                model_qat = pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size) 
+        # for i in range(5):
+        if COMB:
+            model_qat = pann_qat_v2(TENSORBOARD, pruned_model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size, COMB) 
+        else:
+            model_qat = pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size) 
     elif(PANN_SQ):
         model_sq = pann_sq(model_pann_trained, dataloaders)
     elif(OPNORM_PRUNING):
-        for i in range(5):
+        pruning_percentages = [0.5, 0.6, 0.7, 0.8, 0.9]
+        for i in pruning_percentages:
+            P = i
             today = datetime.now()
             date = today.strftime('%b%d_%y-%H-%M')
-            model_dir = f"compression/runs/OPNORM_PRUNING_{P}/{date}"
+            model_dir = f"compression/runs/CNN_14/OPNORM_PRUNING_{P}/{date}"
             if TENSORBOARD: writer = SummaryWriter(model_dir)
 
-            model_pruned = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
-            model_original = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
+            model_pruned = Cnn14_pruned(P, 44100, 512, 320, 64, 50, 14000, 80)
+            model_original = Cnn14(44100, 512, 320, 64, 50, 14000, 80, post_training=True).to(device)
+
             pretrained_weights = torch.load(model_pann_trained)
             model_original.load_state_dict(pretrained_weights)
 
             print_model_size(model_original)
 
-            save_pruned_layers()
-            model_pruned = import_pruned_weights(model_original, model_pruned, P)
+            save_pruned_layers(cnn_14=True)
+            model_pruned = import_pruned_weights(model_original, model_pruned, P, cnn_14=True)
             
             if TENSORBOARD:
                 pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, writer)
@@ -135,21 +137,28 @@ def main():
             print_model_size(model_pruned)
 
     elif(L1_PRUNING):
-        for i in range(5):
+        # for i in range(5):
+        pruning_percentages = [0.5, 0.6, 0.7, 0.8, 0.9]
+        for i in pruning_percentages:
+            P = i
             today = datetime.now()
             date = today.strftime('%b%d_%y-%H-%M')
-            model_dir = f"compression/runs/L1_PRUNING_{P}/{date}"
+            model_dir = f"compression/runs/CNN_14/L1_PRUNING_{P}/{date}"
             if TENSORBOARD: writer = SummaryWriter(model_dir)
 
-            model_pruned = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
-            model_original = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
+            model_pruned = Cnn14_pruned(P, 44100, 512, 320, 64, 50, 14000, 80)
+            model_original = Cnn14(44100, 512, 320, 64, 50, 14000, 80, post_training=True).to(device)
             pretrained_weights = torch.load(model_pann_trained)
+
+            # print(pretrained_weights["model"].keys())
+            # return
+
             model_original.load_state_dict(pretrained_weights)
 
             print_model_size(model_original)
 
-            save_pruned_layers(opnorm=False)
-            model_pruned = import_pruned_weights(model_original, model_pruned, P, opnorm=False)
+            save_pruned_layers(opnorm=False, cnn_14=True)
+            model_pruned = import_pruned_weights(model_original, model_pruned, P, opnorm=False, cnn_14=True)
             
             if TENSORBOARD:
                 pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, writer, opnorm=False)
