@@ -3,5 +3,4 @@
 data/*
 */test
 */train_curated
-*.pt
-*.pth
+resources/cnn_14
