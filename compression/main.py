@@ -40,10 +40,12 @@ def main(args):
         model_pann = "resources/cnn_14/cnn_14.pth"
         model_pann_trained = "resources/cnn_14/model_pann_cnn_14.pt"
         pruned_model_pann_trained = "resources/cnn14/model_opnorm_pruning_0.81_FT.pt" # COMB
+        MODEL = "cnn_14"
     else:
         model_pann = "resources/MobileNetV2/MobileNetV2.pth"
         model_pann_trained = "resources/MobileNetV2/model_pann.pt"
         pruned_model_pann_trained = "resources/MobileNetV2/model_opnorm_pruning_0.81_FT.pt" # COMB
+        MODEL = "MobileNetV2"
 
     if(args.preprocessing):
         convert_dataset(pd.read_csv(training_audio_labels), training_audio_data, training_data) 
@@ -75,10 +77,13 @@ def main(args):
         # Tensorboard
         today = datetime.now()
         date = today.strftime('%b%d_%y-%H-%M')
-        model_dir = f"compression/runs/CNN_14/PANN/{date}"
+        model_dir = f"compression/runs/{MODEL}/PANN/{date}"
         if TENSORBOARD: writer = SummaryWriter(model_dir)
 
-        model = Cnn14(44100, 512, 320, 64, 50, 14000, 527).to(device)
+        if(args.larger):
+            model = Cnn14(44100, 512, 320, 64, 50, 14000, 527).to(device)
+        else:
+            model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 527).to(device)
         pretrained_weights = torch.load(model_pann)["model"] # keys: {iteration: , model: }
         model.load_state_dict(pretrained_weights)
 
@@ -106,30 +111,34 @@ def main(args):
     elif(args.qat2):
         # for i in range(5):
         if args.comb:
-            model_qat = pann_qat_v2(TENSORBOARD, pruned_model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size, args.comb) 
+            model_qat = pann_qat_v2(TENSORBOARD, pruned_model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size, MODEL, args.comb, args.larger) 
         else:
-            model_qat = pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size) 
+            model_qat = pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size, MODEL) 
     elif(args.sq):
-        model_sq = pann_sq(model_pann_trained, dataloaders)
+        model_sq = pann_sq(model_pann_trained, dataloaders, MODEL, args.larger)
     elif(args.op):
         pruning_percentages = [0.5, 0.6, 0.7, 0.8, 0.9]
         for i in pruning_percentages:
             P = i
             today = datetime.now()
             date = today.strftime('%b%d_%y-%H-%M')
-            model_dir = f"compression/runs/CNN_14/OPNORM_PRUNING_{P}/{date}"
+            model_dir = f"compression/runs/{MODEL}/OPNORM_PRUNING_{P}/{date}"
             if TENSORBOARD: writer = SummaryWriter(model_dir)
 
-            model_pruned = Cnn14_pruned(P, 44100, 512, 320, 64, 50, 14000, 80)
-            model_original = Cnn14(44100, 512, 320, 64, 50, 14000, 80, post_training=True).to(device)
+            if(args.larger):
+                model_pruned = Cnn14_pruned(P, 44100, 512, 320, 64, 50, 14000, 80)
+                model_original = Cnn14(44100, 512, 320, 64, 50, 14000, 80, post_training=True).to(device)
+            else:
+                model_pruned = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
+                model_original = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
 
             pretrained_weights = torch.load(model_pann_trained)
             model_original.load_state_dict(pretrained_weights)
 
             print_model_size(model_original)
 
-            save_pruned_layers(cnn_14=True)
-            model_pruned = import_pruned_weights(model_original, model_pruned, P, cnn_14=True)
+            save_pruned_layers(cnn_14=args.larger)
+            model_pruned = import_pruned_weights(model_original, model_pruned, P, cnn_14=args.larger)
             
             if TENSORBOARD:
                 pruned_fine_tuning(model_pruned, P, model_dir, dataloaders, n_epochs, data, threshold, batch_size, TENSORBOARD, writer)
@@ -144,11 +153,15 @@ def main(args):
             P = i
             today = datetime.now()
             date = today.strftime('%b%d_%y-%H-%M')
-            model_dir = f"compression/runs/CNN_14/L1_PRUNING_{P}/{date}"
+            model_dir = f"compression/runs/{MODEL}/L1_PRUNING_{P}/{date}"
             if TENSORBOARD: writer = SummaryWriter(model_dir)
 
-            model_pruned = Cnn14_pruned(P, 44100, 512, 320, 64, 50, 14000, 80)
-            model_original = Cnn14(44100, 512, 320, 64, 50, 14000, 80, post_training=True).to(device)
+            if args.larger:
+                model_pruned = Cnn14_pruned(P, 44100, 512, 320, 64, 50, 14000, 80)
+                model_original = Cnn14(44100, 512, 320, 64, 50, 14000, 80, post_training=True).to(device)
+            else:
+                model_pruned = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80)
+                model_original = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True).to(device)
             pretrained_weights = torch.load(model_pann_trained)
 
             # print(pretrained_weights["model"].keys())

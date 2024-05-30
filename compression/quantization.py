@@ -53,21 +53,28 @@ def pann_qat_v1(TENSORBOARD, model_pann, n_classes, dataloaders, n_epochs, data,
     print_model_size(model_qat)
     return model_qat
 
-def pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size, COMB = False):
+def pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, threshold, batch_size, MODEL, COMB = False, cnn_14 = False):
     # Tensorboard
     today = datetime.now()
     date = today.strftime('%b%d_%y-%H-%M')
     if COMB:
         P = float(model_pann_trained.split("_")[-2])
-        model_dir = f"compression/runs/CNN_14/COMB_{P}/{date}"
+        model_dir = f"compression/runs/{MODEL}/COMB_{P}/{date}"
     else:
-        model_dir = f"compression/runs/CNN_14/PANN_QAT_v2/{date}"
+        model_dir = f"compression/runs/{MODEL}/PANN_QAT_v2/{date}"
     if TENSORBOARD: writer = SummaryWriter(model_dir)
 
-    if COMB:
-        model = Cnn14_pruned(P, 44100, 512, 320, 64, 50, 14000, 80, quantize=True)
+    if cnn_14:
+        if COMB:
+            model = Cnn14_pruned(P, 44100, 512, 320, 64, 50, 14000, 80, quantize=True)
+        else:
+            model = Cnn14(44100, 512, 320, 64, 50, 14000, 80, quantize=True, post_training=True).to(device)
     else:
-        model = Cnn14(44100, 512, 320, 64, 50, 14000, 80, quantize=True, post_training=True).to(device)
+        if COMB:
+            model = MobileNetV2_pruned(P, 44100, 1024, 320, 64, 50, 14000, 80, quantize=True)
+        else:
+            model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, quantize=True, post_training=True).to(device)
+
     pretrained_weights = torch.load(model_pann_trained)
     model.load_state_dict(pretrained_weights)
 
@@ -99,8 +106,11 @@ def pann_qat_v2(TENSORBOARD, model_pann_trained, dataloaders, n_epochs, data, th
     return model_qat
 
 
-def pann_sq(model_pann_trained, dataloaders):
-    model = Cnn14(44100, 512, 320, 64, 50, 14000, 80, quantize=True, post_training=True)
+def pann_sq(model_pann_trained, dataloaders, MODEL, cnn_14 = False):
+    if cnn_14:
+        model = Cnn14(44100, 512, 320, 64, 50, 14000, 80, quantize=True, post_training=True)
+    else:
+        model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, quantize=True, post_training=True)
     pretrained_weights = torch.load(model_pann_trained)
     model.load_state_dict(pretrained_weights)
 
@@ -121,7 +131,7 @@ def pann_sq(model_pann_trained, dataloaders):
 
     model_static_quantized = torch.quantization.convert(model, inplace=False)
                 
-    torch.save(model_static_quantized.state_dict(), f"resources/cnn_14/model_pann_cnn_14_sq.pt")
+    torch.save(model_static_quantized.state_dict(), f"resources/{MODEL}/model_pann_cnn_14_sq.pt")
     print_model_size(model_static_quantized)
     return model_static_quantized
     
