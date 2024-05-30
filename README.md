@@ -9,8 +9,6 @@ The codebase is developed with Python 3.11. Install requirements as follows:
 pip install -r requirements.txt
 ```
 
-Note: Currently a requirements.txt file is not yet available 
-
 ## Training on DCASE and Compressing CNN Models (WIP)
 
 Models can be trained on the DCASE dataset using the `compression/main.py` file. Execute the following command to do this:
