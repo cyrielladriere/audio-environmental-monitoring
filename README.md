@@ -1,6 +1,6 @@
 # Audio-based Environmental Monitoring for Edge Devices
 
-This repo contains code for my master thesis: **Audio-based Environmental Monitoring for Edge Devices**. The thesis focuses on neural network compression, specifically for the audio environmental monitoring domain. A variety of CNN models can be trained using this neural network compression framework. For the thesis, I compressed 2 models: MobileNetV2 and CNN14. Both models have already been pre-trained on AudioSet. The models have been fine-tuned on the DCASE 2019 task 2 dataset and are used for audio tagging.
+This repo contains code for my master thesis: **Audio-based Environmental Monitoring for Edge Devices**. The thesis focuses on neural network compression, specifically for the audio environmental monitoring domain. A variety of CNN models can be trained using this neural network compression framework. For the thesis, I compressed 2 models: MobileNetV2 and CNN14. Both models have already been pre-trained on AudioSet. The models have been fine-tuned on the DCASE 2019 task 2 curated dataset and are used for audio tagging.
 
 ## Environments (WIP)
 
@@ -43,6 +43,10 @@ Training results can be reviewed using TensorBoard with the following command:
 ```sh
 tensorboard --logdir=compression/runs
 ```
+
+## Plot Thesis Figures
+
+To reproduce all figures from the thesis, just run the notebooks in the `scripts` folder.
 
 ## External links
 
