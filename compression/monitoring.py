@@ -132,7 +132,7 @@ def run_all_help(model, command):
     print("Average CPU Temperature during Python script execution:", average_cpu_temp, "°C")
     
 def parser():
-    parser = argparse.ArgumentParser(description="Argument parser for the provided variables")
+    parser = argparse.ArgumentParser(description="Argument parser for monitoring script")
     parser.add_argument("--base", default=False, action="store_true", help="Enable MODEL_PANN")
     parser.add_argument("--qat", default=False, action="store_true", help="Enable PANN_QAT")
     parser.add_argument("--qat2", default=False, action="store_true", help="Enable PANN_QAT_V2")
