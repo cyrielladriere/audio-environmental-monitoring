@@ -9,14 +9,20 @@ The codebase is developed with Python 3.11. Install requirements as follows:
 pip install -r requirements.txt
 ```
 
-## Training on DCASE and Compressing CNN Models (WIP)
+## Training on DCASE and Compressing CNN Models
 
-Models can be trained on the DCASE dataset using the `compression/main.py` file. Execute the following command to do this:
+Models can be trained on the DCASE dataset using the `compression/main.py` file. For example, execute the following command to train the baseline MobileNet model on the DCASE dataset:
 ```sh
-python -m compression.main
+python -m compression.main --base
 ```
-
-Note: Currently code behavior still has to be determined by changing all the variables in the code script (see "Testing env" and "Variables" sections at the top of the script). TODO: fix by creating CLI flags for this.
+The larger baseline CNN14 model can be trained using the `--larger` flag:
+```sh
+python -m compression.main --base --larger
+```
+Check all possibilities with the `-h` flag:
+```sh
+python -m compression.monitoring -h
+```
 
 Note: Pruning and combination techniques require a baseline model that has already been trained on the DCASE dataset. Quantization does not require this, but performs much better when already trained on the target dataset (DCASE in our case).
 
