@@ -79,11 +79,7 @@ def import_pruned_weights(model_original, model_pruned, P, opnorm=True, cnn_14=F
 				# Randomly initialize fully connected layers
 		return model_pruned
 
-def save_pruned_layers(opnorm=True, cnn_14=False):
-	model_pann_trained = "resources/cnn_14/model_pann_cnn_14.pt"
-
-	# load weights from the unpruned network (we have used numpy format to save  and load the pre-trained weights)
-
+def save_pruned_layers(model_pann_trained, opnorm=True, cnn_14=False):
 	# W_init = list(np.load('/~/VGG_MNIST/VGG_MNIST_baseline_200/best_weights_numpy.npy', allow_pickle=True))#list(np.load('/home/arshdeep/Pruning/SPL/VGG_pruned_Model/VGG-CIFAR100_Pruning/data/VGG_weights100.npy',allow_pickle=True))
 	W_init = torch.load(model_pann_trained)
 	W_init = [tensor.cpu().numpy() for tensor in W_init.values()]  # only need the weights, no need for keys because we have the indexes 
