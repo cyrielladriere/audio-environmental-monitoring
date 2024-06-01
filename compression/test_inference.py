@@ -59,7 +59,7 @@ def main(args):
         test_predict(model)
     elif(args.qat2):
         if args.larger:
-            model = MobileNetV2(44100, 512, 320, 64, 50, 14000, 80, post_training=True, quantize=True)
+            model = Cnn14(44100, 512, 320, 64, 50, 14000, 80, post_training=True, quantize=True)
         else:
             model = MobileNetV2(44100, 1024, 320, 64, 50, 14000, 80, post_training=True, quantize=True)
         model.to("cpu")
