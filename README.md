@@ -28,7 +28,7 @@ Note: Pruning and combination techniques require a baseline model that has alrea
 
 ## Compressed models
 
-All compressed models can be found in the `resources` directory. CNN14 models are not included here, these files are too large. However, CNN14 training evaluation is available in Tensorboard (see [Evaluating Training Results](#Evaluating-Training-Results) section)
+All compressed models can be found in the `resources` directory. CNN14 models are not included here, these files are too large. However, CNN14 training evaluation is available in Tensorboard (see [Evaluating Training Results](#Evaluating-Training-Results) section). If you do wish to replicate training, you can download the CNN14 model from the PANN paper (Cnn14_16k_mAP=0.438.pth from https://zenodo.org/records/3987831) and place it in the `resources/cnn_14` folder with the name `cnn_14.pth`. 
 
 ## Inference on Edge Devices
 
