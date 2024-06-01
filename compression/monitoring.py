@@ -9,33 +9,44 @@ def run_python_script(args):
     # Start monitoring CPU and memory usage
     monitor_process = subprocess.Popen(["./compression/scripts/monitor_usage.sh"], stdout=subprocess.PIPE)
 
+    if args.larger:
+        command = ["python3", "-m", "compression.test_inference", "--larger"]
+    else:
+        command = ["python3", "-m", "compression.test_inference"]
+
     if args.base:
         print("Model_PANN (1000):")
-        subprocess.run(["python3", "-m", "compression.test_inference", "--base"])
-    elif(args.qat):
-        print("PANN_QAT (1000):")
-        subprocess.run(["python3", "-m", "compression.test_inference", "--qat"])
+        command.append("--base")
+        subprocess.run(command)
+    # elif(args.qat):
+    #     print("PANN_QAT (1000):")
+    #     subprocess.run(["python3", "-m", "compression.test_inference", "--qat"])
     elif(args.qat2):
         print("PANN_QATv2 (1000):")
-        subprocess.run(["python3", "-m", "compression.test_inference", "--qat2"])
+        command.append("--qat2")
+        subprocess.run(command)
     elif(args.sq):
         print("PANN_SQ (1000):")
-        subprocess.run(["python3", "-m", "compression.test_inference", "--sq"])
+        command.append("--sq")
+        subprocess.run(command)
     elif(args.op):
         print(f"OPNORM_{args.p} (1000):")
+        command.append("--op")
         if args.p != 0.5:
-            subprocess.run(["python3", "-m", "compression.test_inference", "--op", "-p", str(args.p)])
-        else:
-            subprocess.run(["python3", "-m", "compression.test_inference", "--op"])
+            command.append("-p")
+            command.append(str(args.p))
+        subprocess.run(command)
     elif(args.l1):
         print(f"L1_{args.p} (1000):")
+        command.append("--l1")
         if args.p != 0.5:
-            subprocess.run(["python3", "-m", "compression.test_inference", "--l1", "-p", str(args.p)])
-        else:
-            subprocess.run(["python3", "-m", "compression.test_inference", "--l1"])
+            command.append("-p")
+            command.append(str(args.p))
+        subprocess.run(command)
     elif(args.comb):
         print("COMB (1000):")
-        subprocess.run(["python3", "-m", "compression.test_inference", "--comb"])
+        command.append("--comb")
+        subprocess.run(command)
 
     # End monitoring by terminating the bash script
     monitor_process.terminate()
@@ -71,23 +82,41 @@ def run_python_script(args):
     print("Average Memory Usage during Python script execution:", average_mem, "MB")
     print("Average CPU Temperature during Python script execution:", average_cpu_temp, "°C")
 
-def run_all():
-    run_all_help("Model_PANN (1000):", ["python3", "-m", "compression.test_inference", "--base"])
-    time.sleep(60)
-    run_all_help("PANN_QAT (1000):", ["python3", "-m", "compression.test_inference", "--qat"])
-    time.sleep(60)
-    run_all_help("PANN_QATv2 (1000):", ["python3", "-m", "compression.test_inference", "--qat2"])
-    time.sleep(60)
-    run_all_help("PANN_SQ (1000):", ["python3", "-m", "compression.test_inference", "--sq"])
-    time.sleep(60)
-    pruning = [0.5, 0.6 , 0.7, 0.81, 0.91]
-    for p in pruning:
-        run_all_help(f"OPNORM_{p} (1000):", ["python3", "-m", "compression.test_inference", "--op", "-p", str(p)])
+def run_all(larger):
+    if larger:
+        run_all_help("Model_PANN (1000):", ["python3", "-m", "compression.test_inference", "--base", "--larger"])
         time.sleep(60)
-    for p in pruning:
-        run_all_help(f"L1_{p} (1000):", ["python3", "-m", "compression.test_inference", "--l1", "-p", str(p)])
+        # run_all_help("PANN_QAT (1000):", ["python3", "-m", "compression.test_inference", "--qat", "--larger"])
+        # time.sleep(60)
+        run_all_help("PANN_QATv2 (1000):", ["python3", "-m", "compression.test_inference", "--qat2", "--larger"])
         time.sleep(60)
-    run_all_help("COMB (1000):", ["python3", "-m", "compression.test_inference", "--comb"])
+        run_all_help("PANN_SQ (1000):", ["python3", "-m", "compression.test_inference", "--sq", "--larger"])
+        time.sleep(60)
+        pruning = [0.5, 0.6 , 0.7, 0.81, 0.91]
+        for p in pruning:
+            run_all_help(f"OPNORM_{p} (1000):", ["python3", "-m", "compression.test_inference", "--op", "-p", str(p), "--larger"])
+            time.sleep(60)
+        for p in pruning:
+            run_all_help(f"L1_{p} (1000):", ["python3", "-m", "compression.test_inference", "--l1", "-p", str(p), "--larger"])
+            time.sleep(60)
+        run_all_help("COMB (1000):", ["python3", "-m", "compression.test_inference", "--comb", "--larger"])
+    else:
+        run_all_help("Model_PANN (1000):", ["python3", "-m", "compression.test_inference", "--base"])
+        time.sleep(60)
+        run_all_help("PANN_QAT (1000):", ["python3", "-m", "compression.test_inference", "--qat"])
+        time.sleep(60)
+        run_all_help("PANN_QATv2 (1000):", ["python3", "-m", "compression.test_inference", "--qat2"])
+        time.sleep(60)
+        run_all_help("PANN_SQ (1000):", ["python3", "-m", "compression.test_inference", "--sq"])
+        time.sleep(60)
+        pruning = [0.5, 0.6 , 0.7, 0.81, 0.91]
+        for p in pruning:
+            run_all_help(f"OPNORM_{p} (1000):", ["python3", "-m", "compression.test_inference", "--op", "-p", str(p)])
+            time.sleep(60)
+        for p in pruning:
+            run_all_help(f"L1_{p} (1000):", ["python3", "-m", "compression.test_inference", "--l1", "-p", str(p)])
+            time.sleep(60)
+        run_all_help("COMB (1000):", ["python3", "-m", "compression.test_inference", "--comb"])
     
 
 def run_all_help(model, command):
@@ -142,6 +171,7 @@ def parser():
     parser.add_argument("--l1", default=False, action="store_true", help="Enable L1_PRUNING")
     parser.add_argument("--comb", default=False, action="store_true", help="Enable COMBINATION")
     parser.add_argument("--all", default=False, action="store_true", help="Enable ALL models")
+    parser.add_argument("--larger", default=False, action="store_true", help="Enable larger CNN14 model")
 
     return parser.parse_args()
 
@@ -150,5 +180,5 @@ if __name__ == "__main__":
     if not args.all:
         run_python_script(args)
     else:
-        run_all()
+        run_all(args.larger)
 
