@@ -92,7 +92,7 @@ def run_all(larger):
         time.sleep(60)
         run_all_help("PANN_SQ (1000):", ["python3", "-m", "compression.test_inference", "--sq", "--larger"])
         time.sleep(60)
-        pruning = [0.5, 0.6 , 0.7, 0.81, 0.91]
+        pruning = [0.5, 0.6 , 0.7, 0.8, 0.9]
         for p in pruning:
             run_all_help(f"OPNORM_{p} (1000):", ["python3", "-m", "compression.test_inference", "--op", "-p", str(p), "--larger"])
             time.sleep(60)
