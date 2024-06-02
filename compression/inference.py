@@ -12,13 +12,14 @@ import os
 import numpy as np
 import time
 from compression.models.PANN_pretrained import Cnn14, MobileNetV2
+from sklearn.metrics import multilabel_confusion_matrix
 from torchmetrics.classification import BinaryAccuracy, BinaryConfusionMatrix
 device = "cpu"
 # ------------- Testing Env
-MODEL_PANN = False
+MODEL_PANN = True
 PANN_QAT = False
 PANN_QAT_V2 = False      
-PANN_SQ = True         
+PANN_SQ = False         
 OPNORM_PRUNING = False; P=0.91
 L1_PRUNING = False
 # ------------- Variables
@@ -50,6 +51,7 @@ def main():
     labels_global = convert_labels(labels_global)
     
     data_ = train_test_split(list(data.values()), labels_global, test_size=0.2, random_state=10)    # Random state makes sure we get same splits everytime (on same dataset)
+    global y_val
     x_trn, x_val, y_trn, y_val = data_
 
     labels_global = y_val
@@ -165,11 +167,22 @@ def predict(model, dataloader):
             avg_time += end_avg-start_avg
 
         precision = TP/(TP+FP)
-        recall = TP/(TP+FN)
+        recall = TP/(TP+FN) # TPR
+        FPR = FP/(FP+TN)
         F1 = (2*precision*recall)/(precision+recall)
 
         score, weight = calculate_per_class_lwlrap(labels_global, preds)
         lwlrap = (score * weight).sum()
+
+        val_labels = []
+        for label in labels:
+            one_hot_vector = np.zeros(80, dtype=int)
+            one_hot_vector[label] = 1
+            val_labels.append(one_hot_vector)
+        val_truth = np.array(val_labels)
+
+        cf_matrix = multilabel_confusion_matrix(val_truth, np.where(np.array(preds) > threshold, 1, 0))
+
         end = time.time()
         # for x in score:
         #     print(f"{x},", end="")

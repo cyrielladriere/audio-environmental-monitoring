@@ -8,3 +8,146 @@ Total CPU Usage during Python script execution: 65880.1
 Average CPU Usage during Python script execution: 68.55369406867847 %
 Average Memory Usage during Python script execution: 1322.4495317377732 MB
 Average CPU Temperature during Python script execution: 78.42736732570398 °C
+
+PANN_QATv2 (1000):
+Total time: 6939.97s, average inference time for 1batch: 6939.4597ms
+Size: 76.66 MB
+Number of parameters:  32.83 (K)
+Number of trainable parameters:  16.38 (K)
+MACs(G):  0.00 (M)
+Total CPU Usage during Python script execution: 70819.10000000025
+Average CPU Usage during Python script execution: 85.32421686747018 %
+Average Memory Usage during Python script execution: 1408.0433734939759 MB
+Average CPU Temperature during Python script execution: 88.02867469879548 °C
+
+PANN_SQ (1000):
+Total time: 6866.16s, average inference time for 1batch: 6865.6503ms
+Size: 76.66 MB
+Number of parameters:  32.83 (K)
+Number of trainable parameters:  16.38 (K)
+MACs(G):  0.00 (M)
+Total CPU Usage during Python script execution: 70803.30000000032
+Average CPU Usage during Python script execution: 85.40808202653838 %
+Average Memory Usage during Python script execution: 1485.0108564535585 MB
+Average CPU Temperature during Python script execution: 91.24053075995195 °C
+
+OPNORM_0.5 (1000):
+Total time: 617.96s, average inference time for 1batch: 617.4529ms
+Size: 77.80 MB
+Number of parameters:  19436.34 (K)
+Number of trainable parameters:  19156.72 (K)
+MACs(G):  2593.28 (M)
+Total CPU Usage during Python script execution: 34491.20000000001
+Average CPU Usage during Python script execution: 76.64711111111114 %
+Average Memory Usage during Python script execution: 805.5577777777778 MB
+Average CPU Temperature during Python script execution: 76.42044444444518 °C
+
+OPNORM_0.6 (1000):
+Total time: 411.13s, average inference time for 1batch: 410.5535ms
+Size: 50.32 MB
+Number of parameters:  12567.84 (K)
+Number of trainable parameters:  12288.22 (K)
+MACs(G):  1644.63 (M)
+Total CPU Usage during Python script execution: 23644.900000000023
+Average CPU Usage during Python script execution: 78.29437086092723 %
+Average Memory Usage during Python script execution: 740.8311258278146 MB
+Average CPU Temperature during Python script execution: 76.70099337748375 °C
+
+OPNORM_0.7 (1000):
+Total time: 317.10s, average inference time for 1batch: 316.5911ms
+Size: 29.00 MB
+Number of parameters:  7239.35 (K)
+Number of trainable parameters:  6959.73 (K)
+MACs(G):  928.58 (M)
+Total CPU Usage during Python script execution: 19035.999999999978
+Average CPU Usage during Python script execution: 81.00425531914884 %
+Average Memory Usage during Python script execution: 690.5957446808511 MB
+Average CPU Temperature during Python script execution: 73.95957446808507 °C
+
+OPNORM_0.8 (1000):
+Total time: 136.76s, average inference time for 1batch: 136.2504ms
+Size: 13.69 MB
+Number of parameters:  3411.94 (K)
+Number of trainable parameters:  3132.32 (K)
+MACs(G):  408.29 (M)
+Total CPU Usage during Python script execution: 7492.699999999998
+Average CPU Usage during Python script execution: 79.70957446808508 %
+Average Memory Usage during Python script execution: 647.8404255319149 MB
+Average CPU Temperature during Python script execution: 72.31702127659572 °C
+
+OPNORM_0.9 (1000):
+Total time: 65.59s, average inference time for 1batch: 65.0772ms
+Size: 4.44 MB
+Number of parameters:  1102.31 (K)
+Number of trainable parameters:  822.70 (K)
+MACs(G):  102.52 (M)
+Total CPU Usage during Python script execution: 3244.9
+Average CPU Usage during Python script execution: 79.14390243902439 %
+Average Memory Usage during Python script execution: 588.3658536585366 MB
+Average CPU Temperature during Python script execution: 65.71463414634142 °C
+
+L1_0.5 (1000):
+Total time: 574.22s, average inference time for 1batch: 573.7059ms
+Size: 77.80 MB
+Number of parameters:  19436.34 (K)
+Number of trainable parameters:  19156.72 (K)
+MACs(G):  2593.28 (M)
+Total CPU Usage during Python script execution: 32444.000000000004
+Average CPU Usage during Python script execution: 75.45116279069768 %
+Average Memory Usage during Python script execution: 794.8372093023256 MB
+Average CPU Temperature during Python script execution: 76.90093023255848 °C
+
+L1_0.6 (1000):
+Total time: 399.80s, average inference time for 1batch: 399.2866ms
+Size: 50.32 MB
+Number of parameters:  12567.84 (K)
+Number of trainable parameters:  12288.22 (K)
+MACs(G):  1644.63 (M)
+Total CPU Usage during Python script execution: 23216.199999999997
+Average CPU Usage during Python script execution: 80.05586206896551 %
+Average Memory Usage during Python script execution: 758.1862068965518 MB
+Average CPU Temperature during Python script execution: 78.05103448275888 °C
+
+L1_0.7 (1000):
+Total time: 317.85s, average inference time for 1batch: 317.3326ms
+Size: 29.00 MB
+Number of parameters:  7239.35 (K)
+Number of trainable parameters:  6959.73 (K)
+MACs(G):  928.58 (M)
+Total CPU Usage during Python script execution: 18763.99999999999
+Average CPU Usage during Python script execution: 80.18803418803414 %
+Average Memory Usage during Python script execution: 695.034188034188 MB
+Average CPU Temperature during Python script execution: 74.66752136752136 °C
+
+L1_0.8 (1000):
+Total time: 134.67s, average inference time for 1batch: 134.1546ms
+Size: 13.69 MB
+Number of parameters:  3411.94 (K)
+Number of trainable parameters:  3132.32 (K)
+MACs(G):  408.29 (M)
+Total CPU Usage during Python script execution: 7545.900000000003
+Average CPU Usage during Python script execution: 80.27553191489365 %
+Average Memory Usage during Python script execution: 632.7234042553191 MB
+Average CPU Temperature during Python script execution: 71.05212765957444 °C
+
+L1_0.9 (1000):
+Total time: 63.19s, average inference time for 1batch: 62.6786ms
+Size: 4.44 MB
+Number of parameters:  1102.31 (K)
+Number of trainable parameters:  822.70 (K)
+MACs(G):  102.52 (M)
+Total CPU Usage during Python script execution: 3048.6000000000013
+Average CPU Usage during Python script execution: 78.16923076923081 %
+Average Memory Usage during Python script execution: 586.7692307692307 MB
+Average CPU Temperature during Python script execution: 66.4333333333333 °C
+
+COMB (1000):
+Total time: 440.09s, average inference time for 1batch: 439.5787ms
+Size: 3.58 MB
+Number of parameters:  19.92 (K)
+Number of trainable parameters:  3.47 (K)
+MACs(G):  0.00 (M)
+Total CPU Usage during Python script execution: 26346.899999999998
+Average CPU Usage during Python script execution: 83.64095238095237 %
+Average Memory Usage during Python script execution: 658.1365079365079 MB
+Average CPU Temperature during Python script execution: 76.00698412698446 °C
